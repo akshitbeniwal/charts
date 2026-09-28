@@ -45,10 +45,16 @@ different install).
   {{- if $xw.fullnameOverride }}{{- $xfull = $xw.fullnameOverride | trunc 63 | trimSuffix "-" -}}
   {{- else }}{{- $xfull = printf "%s-%s" .Release.Name ($xw.nameOverride | default "xnat") | trunc 63 | trimSuffix "-" -}}{{- end }}
   {{- $arch := dig "volumes" "archive" (dict) $xw -}}
-  {{- $wantPvc := $arch.existingClaim | default (ternary (printf "%s-archive" $xfull) "" (not (empty $arch.size))) -}}
+  {{- /* The xnat chart mounts a volume only when it has a size, existingClaim
+         or not: without one the archive is not its own mounted PVC. */ -}}
+  {{- $wantPvc := "" -}}
+  {{- if $arch.size }}{{- $wantPvc = $arch.existingClaim | default (printf "%s-archive" $xfull) -}}{{- end }}
+  {{- $xname := $xw.nameOverride | default "xnat" | trunc 63 | trimSuffix "-" -}}
+  {{- $podName := dig "server" "podLabels" "app.kubernetes.io/name" "" $ndx -}}
   {{- $wantMount := $arch.mountPath | default ($xw.fileStorePath | default "/data/xnat") -}}
   {{- $bad := list -}}
   {{- if ne ($host | default (printf "%s-xnat-web" .Release.Name)) $xfull }}{{- $bad = append $bad (printf "neurodesk.xnat.server.host: %s" $xfull) -}}{{- end }}
+  {{- if and $podName (ne $podName $xname) }}{{- $bad = append $bad (printf "neurodesk.xnat.server.podLabels app.kubernetes.io/name: %s (XNAT's pod label; the NetworkPolicies select it)" $xname) -}}{{- end }}
   {{- if $launchOn }}
     {{- if ne ($secret | default (printf "%s-xnat-web-admin" .Release.Name)) (printf "%s-admin" $xfull) }}{{- $bad = append $bad (printf "neurodesk.xnat.jupyterhub.credentialsSecret: %s-admin" $xfull) -}}{{- end }}
     {{- if not $wantPvc }}

@@ -96,9 +96,12 @@ What this supports, and what it does not:
 
 ### Changing the integration settings
 
-The hub reads these settings only when it starts. After a `helm upgrade` that
-changes them (or the chart's hub code), the chart's post-upgrade hook restarts
-the hub; nothing to do by hand.
+The hub reads these settings only when it starts. After a `helm upgrade` or
+`helm rollback` that changes them (or the chart's hub code), the chart's hook
+restarts the hub and waits for it; nothing to do by hand. Restart the hub
+yourself (`kubectl rollout restart deployment/hub`) when hooks do not run:
+`--no-hooks`, manifests applied from `helm template`, or a rollback to a chart
+older than 0.3.0.
 
 ## Under the AIS umbrella
 

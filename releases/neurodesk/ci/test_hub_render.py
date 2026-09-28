@@ -35,7 +35,7 @@ def render(extra, release="rel"):
 
 def reload_patch(docs):
     job = [d for d in docs if d["kind"] == "Job" and d["metadata"]["name"].endswith("-hub-reload")][0]
-    args = job["spec"]["template"]["spec"]["containers"][0]["args"]
+    args = job["spec"]["template"]["spec"]["initContainers"][0]["args"]
     target = args[args.index("deployment") + 1]
     stamp = json.loads(args[args.index("-p") + 1])["spec"]["template"]["metadata"]["annotations"]
     return target, stamp["neurodesk.org/hub-integration"]
@@ -80,6 +80,14 @@ def main():
     ok = reload_patch(render([]))[1] == stamps["xnat on"]
     failures += not ok
     print("%s reload fingerprint is stable for unchanged settings" % ("PASS" if ok else "FAIL"))
+
+    # The reload must also run on rollback, and every hook object with it.
+    docs = render([])
+    events = {d["kind"]: d["metadata"]["annotations"]["helm.sh/hook"] for d in docs
+              if d["metadata"]["name"].endswith("-hub-reload")}
+    ok = len(events) == 4 and all(set(v.split(",")) == {"post-upgrade", "post-rollback"} for v in events.values())
+    failures += not ok
+    print("%s reload hook objects run on post-upgrade and post-rollback: %s" % ("PASS" if ok else "FAIL", events))
     print("\n%d failure(s)" % failures)
     return 1 if failures else 0
 

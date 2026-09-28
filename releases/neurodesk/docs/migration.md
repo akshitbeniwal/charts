@@ -230,13 +230,16 @@ behaviour against KubeSpawner 7.1.0. On a fresh install, set a per-server
 template before any server starts, if you want one; XNAT-launched servers then
 lose their home when XNAT removes them.
 
-### Hub reload on upgrade
+### Hub reload on upgrade and rollback
 
 The hub reads the integration settings and the chart's hub Python only when it
-starts. A post-upgrade hook Job (`<fullname>-hub-reload`, allowed only `get`
-and `patch` on the hub Deployment) stamps their fingerprint on the hub's pod
-template, which restarts the hub when they changed and does nothing otherwise.
-The first upgrade that runs it restarts the hub once.
+starts. A hook Job (`<fullname>-hub-reload`, post-upgrade and post-rollback;
+allowed `get`, `patch`, `list` and `watch` on the hub Deployment only) stamps
+their fingerprint on the hub's pod template, which restarts the hub when they
+changed and does nothing otherwise, and then waits for that rollout. The first
+upgrade that runs it restarts the hub once. Without hooks (`--no-hooks`,
+`helm template` output applied directly) or on a rollback to a chart older than
+0.3.0, restart the hub yourself: `kubectl rollout restart deployment/hub`.
 
 ### Other changes
 
