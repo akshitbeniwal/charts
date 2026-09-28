@@ -26,9 +26,12 @@ GET <xnat>/xapi/jupyterhub/users/<user>/server/user-options      (default server
 ```
 
 It uses an XNAT account read from a Kubernetes Secret at spawn time (by default
-the AIS xnat chart's admin Secret `<release>-xnat-web-admin`; the hub gets `get`
-on that one Secret only). The options sent with the hub API call are ignored: a
-user can start their own server with any options, so only XNAT's answer counts.
+the AIS xnat chart's admin Secret `<release>-xnat-web-admin`). The chart grants
+`get` on that Secret, which is what the hub needs when z2jh's RBAC is off; with
+z2jh's defaults (`rbac.create: true`) the hub's own Role can already read every
+Secret in the release namespace, including XNAT's when XNAT shares it, as under
+the AIS umbrella. The options sent with the hub API call are ignored: a user can
+start their own server with any options, so only XNAT's answer counts.
 
 What the hook applies:
 

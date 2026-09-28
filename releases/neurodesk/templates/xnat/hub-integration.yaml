@@ -39,8 +39,9 @@ data:
 {{- $secret := $xj.credentialsSecret | default (printf "%s-xnat-web-admin" .Release.Name) }}
 ---
 # The hub reads the XNAT account it calls user-options with from this Secret at
-# spawn time (by default the AIS xnat chart's own admin Secret). Only `get` on
-# that one Secret.
+# spawn time (by default the AIS xnat chart's own admin Secret): `get` on that
+# Secret. (z2jh's own hub Role, with rbac.create=true, already covers every
+# Secret in the namespace; this grant is what remains when it is off.)
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
