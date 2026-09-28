@@ -9,7 +9,7 @@ different install).
        would no longer turn the hub off, and hub auth/ingress/storage overrides
        would not apply. */ -}}
 {{- if hasKey .Values "jupyterhub" }}
-  {{- fail "ais: the top-level `jupyterhub:` values block is from ais 1.x and is no longer used. ais 2.0 installs JupyterHub through `neurodesk`: move hub/singleuser/ingress/auth settings under `neurodesk.jupyterhub:`, and use `neurodesk.enabled: false` to install without a hub. See https://github.com/neurodesk/helm-chart/blob/main/docs/migration.md#ais-umbrella-chart-1x---20." }}
+  {{- fail "ais: the top-level `jupyterhub:` values block is from ais 1.x and is no longer used. ais 2.0 installs JupyterHub through `neurodesk`: move hub/singleuser/ingress/auth settings under `neurodesk.jupyterhub:`, and use `neurodesk.enabled: false` to install without a hub. See releases/neurodesk/docs/migration.md." }}
 {{- end }}
 
 {{- /* Neurodesk pins AppArmor through the pod securityContext field, which the

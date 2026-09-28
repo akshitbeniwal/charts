@@ -32,10 +32,10 @@ ctp:
   enabled: true
   # ctp overrides below
 
-# neurodesk subchart values (overrides neurodesk/values.yaml; docs:
-# https://github.com/neurodesk/helm-chart/tree/main/docs). It brings its own
-# JupyterHub (z2jh 4.4), so the ais 1.x `jupyterhub:` block no longer applies:
-# move hub/singleuser settings under `neurodesk.jupyterhub:`.
+# neurodesk subchart values (overrides neurodesk/values.yaml; see
+# releases/neurodesk/docs). It brings its own JupyterHub (z2jh 4.4), so the
+# ais 1.x `jupyterhub:` block no longer applies: move hub/singleuser settings
+# under `neurodesk.jupyterhub:`.
 neurodesk:
   enabled: true
   # Prerequisites when enabled: Kubernetes >= 1.30, AppArmor on the nodes,
@@ -50,9 +50,8 @@ neurodesk:
   # Secret. Still to do once, in XNAT (Administer > Plugin Settings >
   # JupyterHub): hub API URL http://hub:8081/hub/api, the hub's public URL, the
   # `xnat` service token below, and a compute environment with the notebook
-  # image; see https://github.com/neurodesk/helm-chart/blob/main/docs/xnat.md.
-  # XNAT's archive, prearchive and workspaces volumes need a ReadWriteMany
-  # StorageClass.
+  # image (releases/neurodesk/docs/xnat.md). XNAT's archive, prearchive and
+  # workspaces volumes need a ReadWriteMany StorageClass.
   xnat:
     enabled: true
     jupyterhub:
