@@ -1,0 +1,43 @@
+{{- /*
+Optional NetworkPolicy: allow JupyterHub singleuser pods egress to the
+EXTERNAL XNAT server's namespace so the xnat-upload extension can reach it.
+
+Only rendered when xnat is enabled AND xnat.server.namespace is set — if the
+XNAT server is reached by some other path (public DNS, no NetworkPolicy
+enforcement in the cluster, etc.) leave xnat.server.namespace empty and this
+manifest is skipped. The XNAT server itself is NOT deployed by this chart;
+this policy only opens the egress path to wherever it already runs.
+
+singleuser pods are labelled by z2jh (the jupyterhub subchart) with
+`component: singleuser-server`; we select them by that label rather than the
+neurodesk.selectorLabels (which the subchart's pods do not carry).
+*/ -}}
+{{- if and .Values.xnat.enabled .Values.xnat.server.namespace }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: singleuser-egress-xnat
+  namespace: {{ include "neurodesk.namespace" . }}
+  labels:
+    {{- include "neurodesk.labels" . | nindent 4 }}
+    component: xnat-upload
+spec:
+  podSelector:
+    matchLabels:
+      # z2jh label on every spawned singleuser server pod.
+      component: singleuser-server
+  policyTypes:
+    - Egress
+  egress:
+    # Allow DNS resolution (kube-dns / CoreDNS) so the XNAT host name resolves.
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Allow traffic to any pod in the XNAT server's namespace.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.xnat.server.namespace | quote }}
+{{- end }}
