@@ -146,8 +146,8 @@ fixed.
 
 ## AIS umbrella chart 1.x -> 2.0
 
-ais 2.0 (`releases/ais` in Australian-Imaging-Service/charts) replaces its
-plain `jupyterhub` dependency (z2jh 4.3) with this chart:
+ais 2.0 (`releases/ais` in Australian-Imaging-Service/charts) installs its hub
+through this chart instead of its own `jupyterhub` dependency (z2jh 4.3).
 
 - Move the top-level `jupyterhub:` values block under `neurodesk.jupyterhub:`.
   ais 2.0 refuses to render while the old block exists, so an old
@@ -157,29 +157,89 @@ plain `jupyterhub` dependency (z2jh 4.3) with this chart:
   (or `neurodesk.cert-manager.enabled: true`), a single bundled Security
   Profiles Operator per cluster, and a `ReadWriteMany` StorageClass for XNAT's
   volumes, which now include `workspaces`.
-- The hub is a new z2jh 4.4 install with its own names (`hub`, `proxy-public`,
-  database PVC `hub-db-dir`): users, API tokens and server records of the ais
-  1.x hub are not carried over. Before relying on existing homes, compare the
-  users' PVC names (`kubectl get pvc`) with `claim-{username}`.
 - XNAT is wired to the hub by the umbrella; XNAT's own JupyterHub settings are
   still entered once in XNAT ([xnat.md](xnat.md#under-the-ais-umbrella)).
+- **Before `helm upgrade`, apply the Security Profiles Operator CRDs.** Helm
+  installs a chart's CRDs only on a first install, and this upgrade adds the
+  operator to an existing release; the chart stops with this instruction if
+  they are missing: `helm pull ais --untar` from the AIS repo, then
+  `kubectl apply --server-side -f ais/charts/neurodesk/vendor/security-profiles-operator/crds/crds.yaml`.
+- **The hub is no longer exposed by default.** ais 1.x left z2jh's defaults, so
+  `<release>-jupyterhub-proxy-public` was a LoadBalancer. ais 2.0 has a
+  ClusterIP `proxy-public` and no ingress: set `neurodesk.jupyterhub.ingress`
+  (or `neurodesk.jupyterhub.proxy.service.type`) for the public URL users and
+  XNAT need. Set a real login first (`neurodesk.auth.aaf`, or another
+  authenticator): the default is z2jh's placeholder `dummy`, which accepts any
+  username and password.
+- The upgrade restarts XNAT (two plugins and the `workspaces` volume are added).
+  The new PVC `<release>-xnat-web-workspaces` asks the default StorageClass for
+  ReadWriteMany; if it cannot provide that, set
+  `xnat.xnat-web.volumes.workspaces.storageClass` or `existingClaim`, or XNAT
+  stays down waiting for it.
+- `helm uninstall` now runs a cleanup Job first and refuses while any notebook
+  server is running (see [install.md](install.md)).
+
+**An existing ais 1.x hub: keep its names, or plan for losing its database.**
+ais 1.x named its hub objects `<release>-jupyterhub-*` (it set
+`jupyterhub.fullnameOverride: null`). This chart's default names are `hub`,
+`proxy-public` and so on. With the default names, the upgrade removes the old
+objects from the release, including the hub database PVC
+`<release>-jupyterhub-hub-db-dir` (it has no keep policy); whether its data
+survives then depends on the PersistentVolume's reclaim policy. So either:
+
+1. **Keep the names** (for a hub that has users): set
+   `neurodesk.jupyterhub.fullnameOverride: null`. The hub, its database PVC and
+   its Secret keep their 1.x names. XNAT then uses
+   `http://<release>-jupyterhub-hub:8081/hub/api`, and the `xnat` token is in
+   Secret `<release>-jupyterhub-hub`.
+2. **Start a fresh hub**: back up the old database PVC first. Users, API tokens
+   and server records of the 1.x hub are not carried over.
+
+User home PVCs are created by KubeSpawner, not Helm, so neither route deletes
+them. Neither route has been rehearsed on a real ais 1.x release.
 
 ## 0.2.x -> 0.3.0
 
 New, all off by default: servers launched from XNAT (`xnat.jupyterhub.*`), the
 AAF login preset (`auth.aaf.*`), and the hub-side wiring for the AIS umbrella
-chart. See [xnat.md](xnat.md). One default changes:
+chart. See [xnat.md](xnat.md).
 
-- **`jupyterhub.singleuser.storage.dynamic.pvcNameTemplate: claim-{username}`**
-  (z2jh's default was `claim-{user_server}`). All of a user's servers now share
-  one home. Default servers are unaffected: the name is the same for them.
-  Releases that allowed named servers before get the user's default home in
-  every named server from now on; the old per-server PVCs
-  (`claim-<user>--<server>`) are left in place, no longer mounted, and not
-  deleted by KubeSpawner. Copy anything needed from them, then delete them. To
-  keep per-server homes, set `pvcNameTemplate: claim-{user_server}` in your
-  overlay (KubeSpawner 7.1 then deletes a named server's home when the server
-  is removed).
+### One home per user
+
+The default `jupyterhub.singleuser.storage.dynamic.pvcNameTemplate` is now
+`claim-{username}` (z2jh's is `claim-{user_server}`). ais-devstack runs XNAT
+launches the same way (`jupyter-{username}`).
+
+- Default servers keep their PVC: the name is the same for them.
+- New named servers use the user's default home.
+- Named servers that already exist (running or stopped) keep the per-server PVC
+  KubeSpawner remembered for them (`claim-<user>--<server>`) until they are
+  removed, and KubeSpawner no longer deletes such a PVC when its server is
+  removed. Retire one only after its server is gone: check the user's servers
+  (`GET /hub/api/users/<user>?include_stopped_servers=true`, or the admin page),
+  copy what is needed, then delete the PVC.
+
+**Do not switch an install that has used the shared home back to
+`claim-{user_server}` while KubeSpawner may delete PVCs.** A named server
+created while the home was shared remembers `claim-<user>`, and KubeSpawner
+decides whether to delete by the *current* template: removing that server
+would delete the user's shared home, the one their other servers use. Set
+`jupyterhub.hub.config.KubeSpawner.delete_pvc: false` before switching, and keep
+it until no such named server is left. `ci/test_home_pvc_policy.py` pins this
+behaviour against KubeSpawner 7.1.0. On a fresh install, set a per-server
+template before any server starts, if you want one; XNAT-launched servers then
+lose their home when XNAT removes them.
+
+### Hub reload on upgrade
+
+The hub reads the integration settings and the chart's hub Python only when it
+starts. A post-upgrade hook Job (`<fullname>-hub-reload`, allowed only `get`
+and `patch` on the hub Deployment) stamps their fingerprint on the hub's pod
+template, which restarts the hub when they changed and does nothing otherwise.
+The first upgrade that runs it restarts the hub once.
+
+### Other changes
+
 - `xnat.server.host` may now be empty (`<release>-xnat-web`). The singleuser
   NetworkPolicy `singleuser-egress-xnat` now also renders for XNAT in the same
   namespace (then only XNAT's pods, `xnat.server.podLabels`/`port`), and it is

@@ -19,37 +19,9 @@ see docs/xnat.md.
 {{- $x := .Values.xnat | default dict -}}
 {{- $xj := dig "jupyterhub" (dict) $x -}}
 {{- $xnatHub := and .Values.jupyterhub.enabled $x.enabled (dig "enabled" false $xj) -}}
-{{- $aaf := dig "aaf" (dict) (.Values.auth | default dict) -}}
-{{- $aafOn := and .Values.jupyterhub.enabled (dig "enabled" false $aaf) -}}
 {{- $ns := include "neurodesk.namespace" . -}}
-{{- $host := include "neurodesk.xnatHost" . -}}
-{{- if or $xnatHub $aafOn }}
-{{- $cfg := dict -}}
-{{- if $xnatHub }}
-{{- $_ := set $cfg "xnat" (dict
-      "url" ($xj.url | default (printf "http://%s" $host))
-      "namespace" $ns
-      "credentialsSecret" ($xj.credentialsSecret | default (printf "%s-xnat-web-admin" .Release.Name))
-      "usernameKey" ($xj.usernameKey | default "username")
-      "passwordKey" ($xj.passwordKey | default "password")
-      "archivePvc" ($xj.archivePvc | default (printf "%s-xnat-web-archive" .Release.Name))
-      "archiveMountPath" ($xj.archiveMountPath | default "/data/xnat/archive")
-      "archiveGid" (int (dig "archiveGid" 65534 $xj))
-      "homeMountPath" (dig "singleuser" "storage" "homeMountPath" "/home/jovyan" (.Values.jupyterhub | default dict))
-      "uid" (int ($xj.uid | default 1000))
-      "gid" (int ($xj.gid | default 100))
-      "requestTimeoutSeconds" (int ($xj.requestTimeoutSeconds | default 10))
-      "failOpen" (dig "failOpen" false $xj)) -}}
-{{- end }}
-{{- if $aafOn }}
-{{- $_ := set $cfg "aaf" (dict
-      "clientId" $aaf.clientId
-      "callbackUrl" $aaf.callbackUrl
-      "usernamePrefix" (dig "usernamePrefix" "aaf_" $aaf)
-      "usernameClaim" (dig "usernameClaim" "sub" $aaf)
-      "allowAll" (dig "allowAll" true $aaf)
-      "issuer" (dig "issuer" "https://central.aaf.edu.au" $aaf)) -}}
-{{- end }}
+{{- $cfgJson := include "neurodesk.hubIntegrationConfig" . }}
+{{- if $cfgJson }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -59,7 +31,7 @@ metadata:
   labels:
     {{- include "neurodesk.labels" . | nindent 4 }}
 data:
-  integration.json: {{ toJson $cfg | quote }}
+  integration.json: {{ $cfgJson | quote }}
   neurodesk_integrations.py: |
     {{- .Files.Get "files/hub/neurodesk_integrations.py" | nindent 4 }}
 {{- end }}

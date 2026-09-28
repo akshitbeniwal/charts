@@ -6,7 +6,7 @@ ways, all **off by default**:
 | Part | Toggle | What users get |
 | --- | --- | --- |
 | XNAT upload extension | `xnat.enabled` (+ `xnat.uploadExtension.enabled`, default on) | Upload data from JupyterLab to XNAT. |
-| Servers launched **from XNAT** | `xnat.jupyterhub.enabled` (needs `xnat.enabled`) | XNAT's "Start Jupyter" opens a notebook with the chosen image, resources and the selected XNAT data mounted read-only. |
+| Servers launched **from XNAT** | `xnat.jupyterhub.enabled` (under `xnat.enabled`) | XNAT's "Start Jupyter" opens a notebook with the chosen image, resources and the selected XNAT data mounted read-only. |
 | AAF login | `auth.aaf.enabled` | JupyterHub login through the Australian Access Federation, with usernames that match XNAT's. |
 
 The chart never deploys or configures XNAT itself. Under the AIS umbrella chart
@@ -75,12 +75,27 @@ jupyterhub:
         pvcNameTemplate: claim-{username}
 ```
 
-so all of a user's servers share one home, and KubeSpawner never deletes a
-shared home on named-server removal. Default servers keep the PVC they already
-had (`claim-{username}` is the same name for them). With `ReadWriteOnce` home
-storage, two servers of the same user running at the same time must land on the
-same node; use a `ReadWriteMany` StorageClass for homes on multi-node clusters
-if users run several servers at once.
+so all of a user's servers share one home (as ais-devstack does with
+`jupyter-{username}`), and KubeSpawner does not delete a shared home when a
+named server is removed. Default servers keep the PVC they already had
+(`claim-{username}` is the same name for them).
+
+What this supports, and what it does not:
+
+- **ReadWriteOnce homes** (the usual block storage): one server per user at a
+  time, or several on the same node. The chart does not force a user's servers
+  onto one node; a second server scheduled on another node cannot attach the
+  home and fails to start (the first server and the data are unaffected).
+- **ReadWriteMany homes**: several servers per user on any nodes.
+- **Do not change the template back** on an install that has used the shared
+  home without `KubeSpawner.delete_pvc: false` first; see
+  [migration.md](migration.md#one-home-per-user).
+
+### Changing the integration settings
+
+The hub reads these settings only when it starts. After a `helm upgrade` that
+changes them (or the chart's hub code), the chart's post-upgrade hook restarts
+the hub; nothing to do by hand.
 
 ## Under the AIS umbrella
 

@@ -55,10 +55,15 @@ class Spawner:
 
 OPTIONS = {"task_template": {
     "placement": {"constraints": ["node.kubernetes.io/instance-type==big"]},
-    "resources": {"cpu_limit": 4, "mem_limit": "8G", "generic_resources": {"gpu": 1}},
+    # plus fields that are NOT hardware: they must never reach the pod spec
+    "resources": {"cpu_limit": 4, "mem_limit": "8G",
+                  "generic_resources": {"gpu": 1, "cpu": 64, "kubernetes.io/x": 1, "example.org/fpga": "two"},
+                  "hostNetwork": True, "serviceAccountName": "hub",
+                  "securityContext": {"appArmorProfile": {"type": "Unconfined"}}},
     "container_spec": {
         "image": "ghcr.io/neurodesk/neurodesktop:2026-09-23",
-        "env": {"XNAT_HOST": "http://ais-xnat-web", "JUPYTERHUB_ROOT_DIR": "/workspace/aaf_alice"},
+        "env": {"XNAT_HOST": "http://ais-xnat-web", "JUPYTERHUB_ROOT_DIR": "/workspace/aaf_alice",
+                "JUPYTERHUB_API_TOKEN": "not-from-xnat"},
         "mounts": [
             {"source": "/data/xnat/archive/P1/arc001/S1", "target": "/data/projects/P1/experiments/S1", "read_only": True},
             {"source": "/data/xnat/workspaces/users/alice", "target": "/workspace", "read_only": False},
@@ -147,7 +152,10 @@ async def main():
     check("basic auth sent", seen and seen[-1][2].startswith("Basic "))
     check("image applied", sp.image.endswith(":2026-09-23"))
     check("node selector merged", sp.node_selector == {"kubernetes.io/os": "linux", "node.kubernetes.io/instance-type": "big"})
-    check("fuse kept + gpu mapped", sp.extra_resource_limits == {"smarter-devices/fuse": "1", "nvidia.com/gpu": 1})
+    check("fuse kept + gpu mapped", sp.extra_resource_limits == {"smarter-devices/fuse": "1", "nvidia.com/gpu": "1"})
+    check("non-device generic resources ignored", set(sp.extra_resource_guarantees) == {"smarter-devices/fuse", "nvidia.com/gpu"})
+    check("unknown resource keys never reach the pod spec", sp.extra_pod_config == {})
+    check("XNAT cannot set JupyterHub's own variables", "JUPYTERHUB_API_TOKEN" not in sp.environment)
     check("cpu/mem applied", sp.cpu_limit == 4 and sp.mem_limit == "8G")
     mounts = sp.volume_mounts
     arch = [m for m in mounts if m["name"] == "xnat-archive"]
@@ -249,6 +257,21 @@ async def main():
         check("hung XNAT times out", False)
     except RuntimeError:
         check("hung XNAT times out (<3s)", asyncio.get_event_loop().time() - t < 3)
+    srv.stop()
+
+    # 4b. a hanging Secret read is inside the same deadline
+    srv, port = await serve("ok")
+    ns, c = load({"xnat": xcfg(port)})
+
+    async def slow_creds(_):
+        await asyncio.sleep(5)
+    ns["_ndi_xnat_credentials"] = slow_creds
+    t = asyncio.get_event_loop().time()
+    try:
+        await c.KubeSpawner.pre_spawn_hook(Spawner())
+        check("hung Secret read times out", False)
+    except RuntimeError as e:
+        check("hung Secret read times out (<3s)", asyncio.get_event_loop().time() - t < 3 and "no answer" in str(e))
     srv.stop()
 
     # 5. chaining with an existing hook

@@ -282,7 +282,7 @@ under the AIS umbrella XNAT is in the same release. See [xnat.md](xnat.md).
 | `xnat.server.namespace` | `""` | XNAT's namespace when it is not the release namespace (NetworkPolicies then allow that namespace). `""` = same namespace: policies select `xnat.server.podLabels` on `xnat.server.port`. | n/a |
 | `xnat.server.podLabels` | `app.kubernetes.io/name: xnat-web` | Labels of XNAT's pods (same-namespace NetworkPolicies). | n/a |
 | `xnat.server.port` | `8080` | XNAT's container port (same-namespace NetworkPolicies). | n/a |
-| `xnat.jupyterhub.enabled` | `false` | Servers launched from XNAT: pre-spawn hook, Role on the credentials Secret, hub<->XNAT NetworkPolicy, named servers on. Needs `xnat.enabled`. | XNAT-launched servers get the chart defaults, no XNAT data. |
+| `xnat.jupyterhub.enabled` | `false` | Servers launched from XNAT: pre-spawn hook, Role on the credentials Secret, hub<->XNAT NetworkPolicy, named servers on. Only takes effect with `xnat.enabled`. | XNAT-launched servers get the chart defaults, no XNAT data. |
 | `xnat.jupyterhub.url` | `""` | XNAT base URL for the hook. `""` = `http://<xnat.server.host>`. | n/a |
 | `xnat.jupyterhub.credentialsSecret` | `""` | Secret with the XNAT account the hook uses (`usernameKey`/`passwordKey`, default `username`/`password`). `""` = `<release>-xnat-web-admin`. | Spawns fail (or use defaults with `failOpen`). |
 | `xnat.jupyterhub.archivePvc` | `""` | PVC with XNAT's archive, in the release namespace. `""` = `<release>-xnat-web-archive`. | No XNAT data in notebooks. |
@@ -332,9 +332,8 @@ pre-1.0 SPO API while `installOperator=true`; see
 [migration.md](migration.md#01x---020)), 5b (`installOperator=false` but the
 cluster does not serve the SPO `v1` kinds; assert with `--api-versions` or
 `security.assumeCrdsPresent=true` when rendering offline), 6 (the removed
-`xnat.uploadExtension.installerImage` key is set) and 7
-(`xnat.jupyterhub.enabled` without `xnat.enabled`, or `auth.aaf.enabled` without
-`clientId` and `callbackUrl`). See
+`xnat.uploadExtension.installerImage` key is set) and 7 (`auth.aaf.enabled`
+without `clientId` and `callbackUrl`). See
 [security.md](security.md#how-the-chart-checks-for-spo).
 
 ## `uninstallCleanup` — pre-delete cleanup hook

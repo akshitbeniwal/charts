@@ -113,6 +113,9 @@ jupyterhub:
         # a home shared this way on named-server removal. Default servers keep
         # their existing PVC: claim-{username} == claim-{user_server} for them.
         # With ReadWriteOnce homes a user's concurrent servers need the same node.
+        # Switching an existing install back to a {user_server} template can
+        # DELETE shared homes: set KubeSpawner.delete_pvc=false first
+        # (docs/migration.md, "One home per user").
         pvcNameTemplate: claim-{username}
       # `cvmfs` PVC is created by this chart's templates when cvmfs.enabled.
       extraVolumes:

@@ -109,6 +109,14 @@ know better (e.g. you supply FUSE from a different device plugin).
   {{- fail "neurodesk: this cluster serves only the legacy Security Profiles Operator API (security-profiles-operator.x-k8s.io/v1alpha1), i.e. SPO < 1.0.0 is installed - for example the neurodesk fork bundled by chart 0.1.0. This chart bundles upstream SPO 1.0.0 (API v1) and cannot upgrade that installation in place: see docs/migration.md (0.1.x -> 0.2.0). If no 0.1.x release is left (it was uninstalled), these are its leftover CRDs, which Helm never deletes: remove them as described in docs/install.md (full SPO teardown) - only when nothing else on the cluster uses SPO, because deleting the CRDs deletes every profile." }}
 {{- end }}
 
+{{- /* 5d. bundled operator arriving by UPGRADE: the release existed without
+       this chart's operator (e.g. the AIS umbrella 1.x -> 2.0). Helm installs
+       crds/ only on a first install, so the SPO CRDs are missing and the
+       upgrade would stop half-way on "no matches for kind". Say how to fix it. */ -}}
+{{- if and .Values.security.installOperator .Release.IsUpgrade (not $spoV1AA) (not $spoLegacyAA) (not .Values.security.assumeCrdsPresent) }}
+  {{- fail "neurodesk: this upgrade adds the bundled Security Profiles Operator to an existing release (for example the AIS umbrella 1.x -> 2.0), and Helm installs a chart's CRDs only on a first install. Apply them, then re-run the upgrade: `helm pull <this chart> --untar` and `kubectl apply --server-side -f neurodesk/vendor/security-profiles-operator/crds/crds.yaml` (under the AIS umbrella: ais/charts/neurodesk/vendor/...). See docs/migration.md." }}
+{{- end }}
+
 {{- /* 5b. external operator (installOperator=false): the v1 kinds must exist. */ -}}
 {{- if and .Values.security.enabled (not .Values.security.installOperator) (not .Values.security.assumeCrdsPresent) }}
   {{- if and .Values.security.appArmor.enabled (not $spoV1AA) }}
@@ -133,11 +141,9 @@ know better (e.g. you supply FUSE from a different device plugin).
   {{- fail "neurodesk: xnat.uploadExtension.installerImage was removed in chart 0.2.0 - it never reached any manifest. The XNAT extension installer image is chosen by the spawner: set jupyterhub.hub.extraEnv.XNAT_EXT_INSTALLER_IMAGE instead (see examples/devstack-values.yaml), and delete the old key. (Chart 0.1.x set it by default, so it also appears when upgrading with --reuse-values; upgrade with your own values files instead.)" }}
 {{- end }}
 
-{{- /* ---- 7. hub integrations need their inputs ---- */ -}}
-{{- $xj := dig "jupyterhub" (dict) (.Values.xnat | default dict) -}}
-{{- if and (dig "enabled" false $xj) (not .Values.xnat.enabled) }}
-  {{- fail "neurodesk: xnat.jupyterhub.enabled=true needs xnat.enabled=true (it wires the hub to that XNAT)." }}
-{{- end }}
+{{- /* ---- 7. AAF login needs its inputs ----
+       (xnat.jupyterhub.enabled needs no guard: like xnat.uploadExtension it
+       only takes effect under xnat.enabled.) */ -}}
 {{- $aaf := dig "aaf" (dict) (.Values.auth | default dict) -}}
 {{- if and (dig "enabled" false $aaf) (or (not $aaf.clientId) (not $aaf.callbackUrl)) }}
   {{- fail "neurodesk: auth.aaf.enabled=true needs auth.aaf.clientId and auth.aaf.callbackUrl (https://<hub host>/hub/oauth_callback). The client secret goes in Secret neurodesk-aaf, key client-secret." }}

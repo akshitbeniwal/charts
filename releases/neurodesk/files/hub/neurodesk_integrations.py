@@ -30,12 +30,21 @@
 #   * no allow_privilege_escalation: Neurodesk images run without it;
 #   * every image works in the user's home volume (homeMountPath), not in
 #     XNAT's /workspace/<user>, which is not mounted.
+import asyncio
 import base64
 import json
 import os
+import re
 from urllib.parse import quote
 
 _NDI_CONFIG = "/etc/neurodesk/integration/integration.json"
+# task_template.resources keys XNAT sends, and the KubeSpawner traits they set.
+# Anything else is ignored: it must never reach the pod spec.
+_NDI_RESOURCES = {"cpu_limit": "cpu_limit", "cpu_reservation": "cpu_guarantee",
+                  "mem_limit": "mem_limit", "mem_reservation": "mem_guarantee"}
+_NDI_DEVICES = {"gpu": "nvidia.com/gpu", "fuse": "smarter-devices/fuse"}
+# An extended resource (<domain>/<name>), outside the kubernetes.io domains.
+_NDI_EXTENDED = re.compile(r"^(?![^/]*kubernetes\.io/)[a-z0-9]([-a-z0-9.]*[a-z0-9])?/[A-Za-z0-9]([-A-Za-z0-9_.]*[A-Za-z0-9])?$")
 
 
 def _ndi_load():
@@ -109,25 +118,22 @@ def _ndi_apply_user_options(spawner, xcfg, options):
         spawner.node_selector = selector
 
     resources = dict(task.get("resources") or {})
-    if resources:
-        if resources.get("cpu_limit"):
-            spawner.cpu_limit = resources.pop("cpu_limit")
-        if resources.get("cpu_reservation"):
-            spawner.cpu_guarantee = resources.pop("cpu_reservation")
-        if resources.get("mem_limit"):
-            spawner.mem_limit = resources.pop("mem_limit")
-        if resources.get("mem_reservation"):
-            spawner.mem_guarantee = resources.pop("mem_reservation")
-        for k in ("cpu_limit", "cpu_reservation", "mem_limit", "mem_reservation"):
-            resources.pop(k, None)
-        generic = dict(resources.pop("generic_resources", None) or {})
-        if generic:
-            names = {"gpu": "nvidia.com/gpu", "fuse": "smarter-devices/fuse"}
-            generic = {names.get(k, k): v for k, v in generic.items()}
-            spawner.extra_resource_guarantees = {**(spawner.extra_resource_guarantees or {}), **generic}
-            spawner.extra_resource_limits = {**(spawner.extra_resource_limits or {}), **generic}
-        if resources:
-            spawner.extra_pod_config = {**(spawner.extra_pod_config or {}), **resources}
+    for key, trait in _NDI_RESOURCES.items():
+        if resources.get(key):
+            setattr(spawner, trait, resources[key])
+    devices = {}
+    for key, count in dict(resources.get("generic_resources") or {}).items():
+        name = _NDI_DEVICES.get(key, key)
+        if not _NDI_EXTENDED.match(name) or not re.fullmatch(r"[1-9][0-9]{0,3}", str(count).strip()):
+            spawner.log.warning("ignoring XNAT generic resource %r=%r (not a device count)", key, count)
+            continue
+        devices[name] = str(count).strip()
+    if devices:
+        spawner.extra_resource_guarantees = {**(spawner.extra_resource_guarantees or {}), **devices}
+        spawner.extra_resource_limits = {**(spawner.extra_resource_limits or {}), **devices}
+    unknown = sorted(set(resources) - set(_NDI_RESOURCES) - {"generic_resources"})
+    if unknown:
+        spawner.log.warning("ignoring unknown XNAT resource keys: %s", ", ".join(unknown))
 
     spec = task.get("container_spec") or {}
     if not spec:
@@ -140,6 +146,10 @@ def _ndi_apply_user_options(spawner, xcfg, options):
     if spec.get("command"):
         spawner.cmd = spec["command"].split(" ")
     env = dict(spec.get("env") or {})
+    # JupyterHub's own variables (API token, URLs, ...) are the hub's to set.
+    hub_vars = sorted(k for k in env if str(k).startswith("JUPYTERHUB_"))
+    for k in hub_vars:
+        env.pop(k)
     # XNAT points the root dir at its workspace mount (/workspace/<user>), which
     # is not mounted here: the user's home volume is the workspace, for every
     # image. Without this a non-Neurodesk server dies with "No such notebook dir".
@@ -221,13 +231,20 @@ def _ndi_xnat_hook(previous_hook):
             xcfg["url"].rstrip("/"), quote(spawner.user.name, safe=""))
         url = base + ("/" + quote(spawner.name, safe="") if spawner.name else "") + "/user-options"
         timeout = float(xcfg.get("requestTimeoutSeconds", 10))
-        try:
+
+        async def fetch():
             user, password = await _ndi_xnat_credentials(xcfg)
-            resp = await AsyncHTTPClient().fetch(
+            return await AsyncHTTPClient().fetch(
                 HTTPRequest(url, auth_username=user, auth_password=password,
                             connect_timeout=timeout, request_timeout=timeout),
                 raise_error=False)
+
+        try:
+            # One deadline for the Secret read and the XNAT request together.
+            resp = await asyncio.wait_for(fetch(), timeout)
             code, body = resp.code, resp.body
+        except asyncio.TimeoutError:
+            code, body = None, ("no answer within %gs (Secret read + XNAT request)" % timeout).encode()
         except Exception as e:  # network, DNS, Secret or RBAC problems
             code, body = None, str(e).encode()
         if code == 200:
