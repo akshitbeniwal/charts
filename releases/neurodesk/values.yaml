@@ -12,7 +12,9 @@
 # Infrastructure is NOT installed here. The chart consumes existing cluster
 # infra by name via the `global` / `infra` blocks: StorageClass, ingress
 # controller, cert-manager Issuer, and the Prometheus Operator (for the
-# optional ServiceMonitors). See docs/ for details.
+# optional ServiceMonitors). See docs/ for details: docs/... and examples/...
+# paths in this file are in https://github.com/neurodesk/helm-chart (they are
+# not part of the packaged chart).
 # ============================================================================
 
 nameOverride: ""

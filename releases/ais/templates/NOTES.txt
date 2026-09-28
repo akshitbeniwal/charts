@@ -26,8 +26,8 @@ Plugin Settings > JupyterHub):
   JupyterHub API URL:  http://hub:8081/hub/api
   JupyterHub host URL: the hub's public URL
   JupyterHub token:    kubectl -n {{ .Release.Namespace }} get secret hub -o jsonpath='{.data.hub\.services\.xnat\.apiToken}' | base64 -d
-and add a compute environment with the notebook image. Details: the neurodesk
-chart's docs/xnat.md.
+and add a compute environment with the notebook image. Details:
+https://github.com/neurodesk/helm-chart/blob/main/docs/xnat.md
 {{- end }}
 
 To check the status of your release:

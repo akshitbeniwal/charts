@@ -84,7 +84,7 @@ has no ingress — reach it with `kubectl port-forward svc/proxy-public 8080:80`
 The bundled Security Profiles Operator needs **cert-manager**. On a cluster that
 has none, add `--set cert-manager.enabled=true` to either command so the one
 release installs it too; on a cluster that already runs cert-manager, leave it
-off. See [docs/install.md](docs/install.md).
+off. See [docs/install.md](https://github.com/neurodesk/helm-chart/blob/main/docs/install.md).
 
 > [!WARNING]
 > The minimal profile ships the `dummy` authenticator, which accepts **any**
@@ -92,13 +92,13 @@ off. See [docs/install.md](docs/install.md).
 > `examples/{neurocloud,devstack}-values.yaml`) before exposing it anywhere
 > beyond a private test cluster. Never commit real client secrets, cookie
 > secrets, XNAT passwords or CryptKeeper keys to a values file — see
-> [docs/secrets.md](docs/secrets.md).
+> [docs/secrets.md](https://github.com/neurodesk/helm-chart/blob/main/docs/secrets.md).
 
 ## Component toggles
 
 Every component is switched from `values.yaml`. Remote subcharts are gated by a
 `Chart.yaml` `condition:`; in-house templates by a `{{- if }}` on the same
-toggle. See [docs/values.md](docs/values.md) for the full key reference.
+toggle. See [docs/values.md](https://github.com/neurodesk/helm-chart/blob/main/docs/values.md) for the full key reference.
 
 | Component | Toggle (default) | Kind | What it deploys |
 | --- | --- | --- | --- |
@@ -123,28 +123,28 @@ toggle. See [docs/values.md](docs/values.md) for the full key reference.
 
 ## Documentation
 
-Full docs live in [`docs/`](docs/):
+Full docs live in [`docs/`](https://github.com/neurodesk/helm-chart/tree/main/docs):
 
-- [architecture.md](docs/architecture.md) — the umbrella model, in/out scope, and
+- [architecture.md](https://github.com/neurodesk/helm-chart/blob/main/docs/architecture.md) — the umbrella model, in/out scope, and
   the "subchart values can't be templated from sibling toggles" Helm caveat.
-- [values.md](docs/values.md) — every `values.yaml` key, grouped, with defaults.
-- [components.md](docs/components.md) — per component: what/source/toggle/prereqs.
-- [install.md](docs/install.md) — prerequisites and the full install walkthrough.
-- [ordering.md](docs/ordering.md) — how one `helm install` handles CRD-before-CR,
+- [values.md](https://github.com/neurodesk/helm-chart/blob/main/docs/values.md) — every `values.yaml` key, grouped, with defaults.
+- [components.md](https://github.com/neurodesk/helm-chart/blob/main/docs/components.md) — per component: what/source/toggle/prereqs.
+- [install.md](https://github.com/neurodesk/helm-chart/blob/main/docs/install.md) — prerequisites and the full install walkthrough.
+- [ordering.md](https://github.com/neurodesk/helm-chart/blob/main/docs/ordering.md) — how one `helm install` handles CRD-before-CR,
   StorageClass-before-PVC and the other ordering the devstack scripts did by hand.
-- [disabling-components.md](docs/disabling-components.md) — turning CVMFS/security
+- [disabling-components.md](https://github.com/neurodesk/helm-chart/blob/main/docs/disabling-components.md) — turning CVMFS/security
   off across the subchart boundary: the map-merge (`null`) / list-replace gotchas
   and the `validation.*` guards.
-- [security.md](docs/security.md) — SPO bundling (upstream 1.0.0), cert-manager,
+- [security.md](https://github.com/neurodesk/helm-chart/blob/main/docs/security.md) — SPO bundling (upstream 1.0.0), cert-manager,
   the profile CRs, sync caveats.
-- [cvmfs.md](docs/cvmfs.md) — the `global.cvmfs` single source of truth, the CVMFS
+- [cvmfs.md](https://github.com/neurodesk/helm-chart/blob/main/docs/cvmfs.md) — the `global.cvmfs` single source of truth, the CVMFS
   topology and the "run CVMFS yourself" path.
-- [xnat.md](docs/xnat.md) — servers launched from XNAT, the AIS umbrella wiring,
+- [xnat.md](https://github.com/neurodesk/helm-chart/blob/main/docs/xnat.md) — servers launched from XNAT, the AIS umbrella wiring,
   the XNAT-side settings, AAF login and the upload extension.
-- [secrets.md](docs/secrets.md) — why secrets never go in `values.yaml`.
-- [consuming-from-neurocloud.md](docs/consuming-from-neurocloud.md) /
-  [consuming-from-devstack.md](docs/consuming-from-devstack.md) /
-  [migration.md](docs/migration.md) — adopting the chart in each deployment, and
+- [secrets.md](https://github.com/neurodesk/helm-chart/blob/main/docs/secrets.md) — why secrets never go in `values.yaml`.
+- [consuming-from-neurocloud.md](https://github.com/neurodesk/helm-chart/blob/main/docs/consuming-from-neurocloud.md) /
+  [consuming-from-devstack.md](https://github.com/neurodesk/helm-chart/blob/main/docs/consuming-from-devstack.md) /
+  [migration.md](https://github.com/neurodesk/helm-chart/blob/main/docs/migration.md) — adopting the chart in each deployment, and
   upgrading from 0.1.x.
 
 ## Relationship to neurocloud and ais-devstack
@@ -160,12 +160,12 @@ deployments. Each consumes it as a thin overlay and keeps its own
   `security` apps and reuses the SPO and CVMFS driver they own; those apps
   (which also carry cryptnono and the DNS filter) stay. Retiring them needs an
   ownership transfer that is not yet rehearsed. See
-  [docs/consuming-from-neurocloud.md](docs/consuming-from-neurocloud.md).
+  [docs/consuming-from-neurocloud.md](https://github.com/neurodesk/helm-chart/blob/main/docs/consuming-from-neurocloud.md).
 - **[ais-devstack](https://github.com/Australian-Imaging-Service/ais-devstack)**
   (script-driven) replaces its numbered JupyterHub install scripts with one
   `helm install` + `examples/devstack-values.yaml` (XNAT overlay). The XNAT
   server and its jars stay in devstack. See
-  [docs/consuming-from-devstack.md](docs/consuming-from-devstack.md).
+  [docs/consuming-from-devstack.md](https://github.com/neurodesk/helm-chart/blob/main/docs/consuming-from-devstack.md).
 
 ## Publishing
 
@@ -178,7 +178,7 @@ helm repo add neurodesk https://neurodesk.github.io/helm-chart
 helm install neurodesk neurodesk/neurodesk -f my-values.yaml
 ```
 
-Pushing a `v*` tag runs [`.github/workflows/pages.yaml`](.github/workflows/pages.yaml),
+Pushing a `v*` tag runs [`.github/workflows/pages.yaml`](https://github.com/neurodesk/helm-chart/blob/main/.github/workflows/pages.yaml),
 which packages the chart and publishes it (+ a merged `index.yaml`) to the
 `gh-pages` branch served at `https://neurodesk.github.io/helm-chart`. *(GitHub
 Pages requires the repository to be public, or a plan that allows private Pages.)*
@@ -193,10 +193,10 @@ helm pull oci://ghcr.io/neurodesk/charts/neurodesk --version <x.y.z>
 #     repository: oci://ghcr.io/neurodesk/charts
 ```
 
-Pushing a `v*` tag runs [`.github/workflows/release.yaml`](.github/workflows/release.yaml),
+Pushing a `v*` tag runs [`.github/workflows/release.yaml`](https://github.com/neurodesk/helm-chart/blob/main/.github/workflows/release.yaml),
 which packages the chart, `helm push`es it to `oci://ghcr.io/neurodesk/charts`
 and attaches the `.tgz` to a GitHub release. Every PR/push runs
-[`.github/workflows/lint-test.yaml`](.github/workflows/lint-test.yaml)
+[`.github/workflows/lint-test.yaml`](https://github.com/neurodesk/helm-chart/blob/main/.github/workflows/lint-test.yaml)
 (`helm dependency build` → `helm lint` → a `helm template` matrix over the
 `ci/ct-values-*.yaml` profiles on Helm 3 and 4 → `ct lint` → a `Chart.lock`
 drift check → kind install tests).
