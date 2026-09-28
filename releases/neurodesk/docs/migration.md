@@ -87,7 +87,8 @@ plan (step 6).
      `jupyterhub.singleuser.storage.dynamic.storageClass` (not
      `global.storageClassName`, which only covers this chart's own in-house PVCs),
      or rely on a cluster default,
-   - the FUSE node label (`kubectl label node --all smarter-device-manager=enabled --overwrite`),
+   - notebook nodes the FUSE device plugin can run on (every untainted Linux
+     node by default; no node label needed),
    - SPO handling — leave `security.installOperator=true` unless an SPO already
      runs (neurocloud: it does, in the `security` app). An existing SPO must be
      ≥ 1.0.0 to be reused (`installOperator=false`, with a profile name of its
@@ -215,7 +216,20 @@ running `helm upgrade` on a 0.1.x release.
     **Pipelines that apply `helm template` output with `kubectl` must now add
     `--no-hooks`**, or the cleanup Job runs at install time. See
     [install.md](install.md#teardown--uninstall).
-12. **z2jh 4.4.2** (was `~4.3.0`): removing a *named* server now also deletes
+12. **The FUSE device plugin runs on every Linux node.** smarter-device-manager
+    now defaults to `nodeSelector: {kubernetes.io/os: linux}`, so the
+    `smarter-device-manager=enabled` node label is no longer needed, and the
+    plugin now also runs on **unlabelled** Linux nodes. To keep the old
+    behaviour, set `smarter-device-manager.nodeSelector:
+    {smarter-device-manager: enabled}` in your overlay (Helm merges it with the
+    default, so a node must be Linux and labelled).
+13. **Bug fix — Squid refused pods outside k3s.** `cvmfs.squid.clientCidrs`
+    defaulted to the k3s ranges (`10.42.0.0/16`, `10.43.0.0/16`), so on k0s or
+    kubeadm clusters, for example, Squid answered `403` and CVMFS silently fell
+    back to `DIRECT`, uncached. The default is now all private ranges
+    (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`); Squid is ClusterIP-only.
+    If you set your own `clientCidrs`, make sure they cover your pod network.
+14. **z2jh 4.4.2** (was `~4.3.0`): removing a *named* server now also deletes
     its home PVC — see [xnat.md](xnat.md). The singleuser image moved to
     `ghcr.io/neurodesk/neurodesktop` (digest-pinned), and the Hub defaults
     changed (`consecutiveFailureLimit: 0`, `KubeSpawner.http_timeout: 120`,

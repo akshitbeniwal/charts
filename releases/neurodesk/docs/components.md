@@ -74,10 +74,9 @@ This is a cluster of pieces under a single top-level toggle:
 - **Deploys:** a DaemonSet that advertises `/dev/fuse` as the schedulable
   resource `smarter-devices/fuse`, which singleuser pods request so FUSE-based
   CVMFS mounts work without privileged pods.
-- **Node prereq:** nodes must be labelled `smarter-device-manager=enabled`:
-  ```sh
-  kubectl label node --all smarter-device-manager=enabled --overwrite
-  ```
+- **Where it runs:** every Linux node (`smarter-device-manager.nodeSelector`,
+  default `kubernetes.io/os: linux`); no node label is needed. It tolerates only
+  the `smarter.type=edge` taint. See [cvmfs.md](cvmfs.md).
 
 ### `cvmfs` PVC + config wiring (in-house)
 - The PVC (`cvmfs.pvc.name`, default `cvmfs`) on the automount StorageClass
@@ -109,9 +108,10 @@ This is a cluster of pieces under a single top-level toggle:
   ServiceMonitor needs a Prometheus Operator. Leave it off unless actively
   developing the analytics.
 
-**Dependencies / prereqs (whole component):** FUSE-capable nodes labelled
-`smarter-device-manager=enabled`; a StorageClass for the Squid cache PVC (if
-enabled); a Prometheus Operator if you want probe/trace-parser metrics.
+**Dependencies / prereqs (whole component):** FUSE-capable Linux nodes that
+the device plugin can schedule on (no node label needed); a StorageClass for
+the Squid cache PVC (if enabled); a Prometheus Operator if you want
+probe/trace-parser metrics.
 
 See [cvmfs.md](cvmfs.md) for the full topology and the "run CVMFS yourself"
 path.

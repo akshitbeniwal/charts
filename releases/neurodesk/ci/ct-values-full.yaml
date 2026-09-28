@@ -31,7 +31,9 @@ namespace:
   create: true
   name: ""
   podSecurityLabels:
-    pod-security.kubernetes.io/enforce: baseline
+    # privileged, not baseline: the cvmfs-csi node plugin and smarter-device-manager
+    # run privileged / hostNetwork in the release namespace.
+    pod-security.kubernetes.io/enforce: privileged
 
 # CVMFS on => cvmfs-csi + smarter-device-manager subcharts render too. Squid,
 # probe and trace-parser all exercised.

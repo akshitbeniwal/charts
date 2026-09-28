@@ -8,8 +8,8 @@ Components enabled in this release:
 
 CLUSTER PREREQUISITES (this chart does NOT install infrastructure):
 {{- if .Values.cvmfs.enabled }}
-  ⚠ Label nodes for FUSE device allocation (smarter-device-manager):
-      kubectl label node --all smarter-device-manager=enabled --overwrite
+  • The FUSE device plugin (smarter-device-manager) runs on the nodes matching
+    smarter-device-manager.nodeSelector (default: every Linux node).
 {{- end }}
 {{- if .Values.cvmfs.external }}
   ⚠ cvmfs.external=true (bring your own CVMFS) — your cluster MUST already

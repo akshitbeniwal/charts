@@ -58,7 +58,7 @@ This block optionally stamps a Namespace object and PodSecurity labels.
 | --- | --- | --- | --- |
 | `namespace.create` | `false` | Render a `Namespace` object. Use with care under `--create-namespace`. | No Namespace object is rendered (rely on `--create-namespace`). |
 | `namespace.name` | `""` | Namespace name. `""` => the release namespace. | n/a — `neurodesk.namespace` falls back to `.Release.Namespace`. |
-| `namespace.podSecurityLabels` | `{}` | PodSecurity labels, e.g. `{ pod-security.kubernetes.io/enforce: baseline }`. | No PodSecurity labels applied. Only effective when `namespace.create=true`. |
+| `namespace.podSecurityLabels` | `{}` | PodSecurity labels, e.g. `{ pod-security.kubernetes.io/enforce: privileged }`. **Not `baseline` or `restricted` while `cvmfs.enabled`**: the cvmfs-csi node plugin is privileged and smarter-device-manager uses `hostNetwork`, both in the release namespace, so a stricter level rejects them. | No PodSecurity labels applied. Only effective when `namespace.create=true`. |
 
 ## `jupyterhub` — JupyterHub (z2jh passthrough)
 
@@ -143,7 +143,7 @@ when `cvmfs.enabled` **and** `global.cvmfs.squidEnabled` are true. When on,
 | `cvmfs.squid.cacheMemMB` | `256` | In-memory cache (MB). |
 | `cvmfs.squid.maxFileDescriptors` | `65536` | squid.conf `max_filedescriptors`. Without a cap squid sizes its descriptor table from the container's NOFILE limit and exits right after start-up where that limit is huge (1073741816 under kind on GitHub runners; reproduced). |
 | `cvmfs.squid.maxObjectSizeMB` | `1024` | Max cacheable object size (MB). |
-| `cvmfs.squid.clientCidrs` | `[10.42.0.0/16, 10.43.0.0/16]` | CIDRs allowed to use the proxy (pod/service nets). |
+| `cvmfs.squid.clientCidrs` | `[10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]` | CIDRs allowed to use the proxy; must cover the pod network. Default: all private ranges (Squid is ClusterIP-only). Squid answers `403` to other clients and CVMFS silently falls back to `DIRECT`, uncached — which is what 0.1.x's k3s-only default (`10.42.0.0/16`, `10.43.0.0/16`) did on k0s and kubeadm clusters. |
 | `cvmfs.squid.resources` | `requests {1Gi,200m}` / `limits {2Gi,1}` | Squid pod resources. The cache index costs ~10 MB per GB of `cache_dir` (50000 MB => ~500 MB) on top of `cacheMemMB`; an OOM loop takes the single proxy offline. Scale the memory limit with `cacheDirSizeMB`. |
 | `cvmfs.squid.nodeSelector` | `{}` | Pin Squid (RWO cache volume) to suitable nodes, e.g. off autoscaled/drainable ones. |
 | `cvmfs.squid.tolerations` | `[]` | Tolerations for the Squid pod. |
@@ -200,10 +200,12 @@ Toggle: `cvmfs.enabled` (subchart `condition:`). Exposes `/dev/fuse` to pods.
 
 | Key | Default | Description |
 | --- | --- | --- |
+| `smarter-device-manager.nodeSelector` | `{kubernetes.io/os: linux}` | Nodes the FUSE device plugin runs on: every Linux node, no label needed. An empty selector makes the upstream chart fall back to a hard-coded `smarter-device-manager: enabled` selector (the label 0.1.x required). Keys you set in an overlay are **merged** with the default, so a node must match both; do not null the default key (the `null` survives into the rendered selector). The plugin tolerates only the `smarter.type=edge` taint (hard-coded upstream). |
 | `smarter-device-manager.config[0].devicematch` | `^fuse$` | Match the FUSE device. |
 | `smarter-device-manager.config[0].nummaxdevices` | `150` | Max FUSE allocations per node. |
 
-> Requires nodes labelled `smarter-device-manager=enabled`. See [cvmfs.md](cvmfs.md).
+> Notebooks request `smarter-devices/fuse`, so they can only be scheduled on
+> nodes where the plugin runs. See [cvmfs.md](cvmfs.md).
 
 ## `security` — security profiles (in-house + SPO subchart)
 
@@ -330,7 +332,7 @@ off), and a raw `helm template | kubectl apply` install must be rendered with
 | --- | --- | --- | --- |
 | `uninstallCleanup.enabled` | `true` | Render the hook. | `helm uninstall` hangs and strands the AppArmorProfile (`Terminating`), the `cvmfs-probe` pod and PVC, and the operator's runtime webhook Deployment, Services, cert-manager objects and `spo-validating-webhook-configuration`. Nothing stops an uninstall while notebooks run. (`helm uninstall --no-hooks` has the same effect for one uninstall.) |
 | `uninstallCleanup.image` | `registry.k8s.io/kubectl:v1.35.9@sha256:436cbaa8…` | kubectl image for every step (digest-pinned; minor matching the tested clusters). | n/a |
-| `uninstallCleanup.timeoutSeconds` | `120` | Wait per step. Keep it below `helm uninstall --timeout` (default 5m). | n/a |
+| `uninstallCleanup.timeoutSeconds` | `120` | Wait per step; it only matters when a step fails or hangs. `helm uninstall --timeout` (default 5m) covers the **whole** hook Job, so pass a larger `--timeout` if a step is expected to be slow. | n/a |
 | `uninstallCleanup.resources` | `requests {10m, 32Mi}` / `limits {memory 128Mi}` | Resources per step container. | n/a |
 
 ## `extraManifests` — escape hatch

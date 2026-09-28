@@ -90,24 +90,22 @@ These are needed before a **user spawns a notebook**, not at chart install:
 - The `cvmfs` PVC and CVMFS CSI nodeplugin must be healthy before a singleuser
   pod mounts `/cvmfs`. Both ship in this chart; by the time anyone spawns, they
   are up.
-- `smarter-devices/fuse` must be allocatable — requires the
-  `smarter-device-manager` DaemonSet (shipped) **and** the node label
-  `smarter-device-manager=enabled` (see the hard gate below).
+- `smarter-devices/fuse` must be allocatable on the node the notebook lands
+  on — requires the `smarter-device-manager` DaemonSet (shipped) to run there.
 
-### The FUSE node label is a HARD GATE, not a soft prereq
+### The FUSE device plugin must run where notebooks run
 
-The `smarter-device-manager=enabled` node label is **not** an
-eventually-converging nicety — it is a blocking precondition. The
-`smarter-device-manager` DaemonSet has a `nodeSelector` on that label, so on
-clusters where **no** node carries it the DaemonSet schedules onto **zero**
-nodes, `smarter-devices/fuse` is advertised **nowhere**, and **every** singleuser
-spawn stays `Pending` forever (unschedulable: no node can satisfy the
-`smarter-devices/fuse: "1"` request). Nothing in the install errors — it just
-never works at spawn time. Label the nodes **before** anyone spawns:
+No node label is needed: the chart runs the `smarter-device-manager` DaemonSet
+on every Linux node (`smarter-device-manager.nodeSelector:
+{kubernetes.io/os: linux}`). Chart 0.1.x left the selector empty, so the
+upstream chart's hard-coded `smarter-device-manager: enabled` selector applied
+and nodes had to be labelled by hand.
 
-```sh
-kubectl label node --all smarter-device-manager=enabled --overwrite
-```
+It can still miss nodes: it tolerates only the `smarter.type=edge` taint, and a
+`nodeSelector` you add in your overlay narrows it further (your keys are merged
+with the default). A notebook scheduled on a node without the plugin stays
+`Pending` (no node can satisfy its `smarter-devices/fuse: "1"` request).
+Nothing in the install errors — it only shows at spawn time.
 
 ## The z2jh image pre-puller is disabled by default
 
@@ -138,7 +136,7 @@ The chart consumes these by name; create them before (or alongside) install:
 | Prereq | Why | How |
 | --- | --- | --- |
 | A default/named **StorageClass** | hub DB + home PVCs (z2jh) + this chart's in-house PVCs | cluster default, or set the z2jh keys `jupyterhub.hub.db.pvc.storageClassName` / `jupyterhub.singleuser.storage.dynamic.storageClass` for the hub DB / home PVCs (`global.storageClassName` only covers this chart's own in-house PVCs) |
-| Node label `smarter-device-manager=enabled` | **Hard gate** for FUSE device allocation (unlabeled => DaemonSet schedules nowhere => every spawn Pending) | `kubectl label node --all smarter-device-manager=enabled --overwrite` |
+| Notebook nodes the FUSE device plugin can run on | FUSE device allocation (no plugin on a node => spawns there stay Pending) | nothing by default: it runs on every untainted Linux node (`smarter-device-manager.nodeSelector`, default `kubernetes.io/os: linux`); no node label needed |
 | **Prometheus Operator CRDs** (`monitoring.coreos.com`) | only if `infra.monitoring.serviceMonitors=true` or trace-parser/probe ServiceMonitors | install kube-prometheus-stack (out of scope) |
 | **cert-manager** | if `security.installOperator=true` (the default) | already running in the cluster, or set `cert-manager.enabled=true` to install it with the release (only on a cluster with none). See [security.md](security.md#cert-manager-required-by-spo) |
 | Existing **SPO ≥ 1.0.0** + its CRDs | only if `security.installOperator=false` | the cluster already runs SPO ≥ 1.0.0 (API `v1`; SPO 0.x is not compatible). The render checks for it; for an offline render assert it with `security.assumeCrdsPresent=true` (see [security.md](security.md)) |

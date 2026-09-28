@@ -65,13 +65,15 @@ inline in the ConfigMap: the in-cluster Squid service when
 `global.cvmfs.squidEnabled`, else `DIRECT`. The repository list
 (`cvmfs.repositories`) is what this chart's PVC/automount exposes under `/cvmfs`.
 
-### 2. smarter-device-manager (remote subchart) + the FUSE node label
+### 2. smarter-device-manager (remote subchart): the FUSE device
 
 CVMFS uses FUSE. Rather than run privileged pods, the chart exposes `/dev/fuse`
 as a schedulable resource via smarter-device-manager:
 
 ```yaml
 smarter-device-manager:
+  nodeSelector:
+    kubernetes.io/os: linux     # every Linux node (the chart default)
   config:
     - devicematch: ^fuse$
       nummaxdevices: 150
@@ -87,15 +89,16 @@ jupyterhub:
       guarantees:{ smarter-devices/fuse: "1" }
 ```
 
-**Node prerequisite — the FUSE label.** smarter-device-manager only advertises
-the device on labelled nodes:
-
-```sh
-kubectl label node --all smarter-device-manager=enabled --overwrite
-```
-
-Skip this and pods that request `smarter-devices/fuse` stay `Pending` and CVMFS
-never mounts.
+**Where it runs.** The chart sets `nodeSelector: {kubernetes.io/os: linux}`, so
+the plugin runs on every Linux node and **no node label is needed**. (With an
+empty selector the upstream chart falls back to a hard-coded
+`smarter-device-manager: enabled` selector; that is why earlier versions
+required labelling nodes.) To limit it, add your own keys under
+`smarter-device-manager.nodeSelector`: Helm merges them with the default, so a
+node must match both. The plugin tolerates only the `smarter.type=edge` taint
+(hard-coded upstream), so it skips nodes with other `NoSchedule` taints. A pod
+that requests `smarter-devices/fuse` on a node without the plugin stays
+`Pending` and CVMFS never mounts.
 
 ### 3. The `cvmfs` PVC (in-house)
 
@@ -142,7 +145,7 @@ cvmfs:
     cacheMemMB: 256
     maxFileDescriptors: 65536   # squid max_filedescriptors; see values.md
     maxObjectSizeMB: 1024
-    clientCidrs: [10.42.0.0/16, 10.43.0.0/16]
+    clientCidrs: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]   # all private ranges
     resources:                  # cache index ~10 MB per GB of cache_dir, on top of cacheMemMB
       requests: { memory: 1Gi, cpu: 200m }
       limits:   { memory: 2Gi, cpu: "1" }
@@ -158,6 +161,13 @@ it's `DIRECT` (pods hit the mirrors directly). Enable Squid to cut egress and
 speed up cold mounts on busy clusters; the cache PVC uses `neurodesk.storageClass`
 (explicit `squid.storageClassName`, else `global.storageClassName`, else cluster
 default).
+
+`cvmfs.squid.clientCidrs` must cover your pod network. Squid answers `403` to
+any other client, and CVMFS then silently falls back to `DIRECT` — it works,
+but uncached. The default is all private ranges (`10.0.0.0/8`,
+`172.16.0.0/12`, `192.168.0.0/16`); Squid is a ClusterIP Service only. Chart
+0.1.x defaulted to the k3s ranges (`10.42.0.0/16`, `10.43.0.0/16`), which made
+Squid refuse pods on k0s and kubeadm clusters, for example.
 
 ### 5. Health probe (in-house)
 

@@ -90,8 +90,10 @@ CVMFS did:
 1. a **PVC named `cvmfs`** mounting `/cvmfs` (or restate the `extraVolumes` list
    with your own claimName);
 2. the **`smarter-devices/fuse`** extended resource — your own
-   `smarter-device-manager` (or equivalent device plugin) **and** the
-   `smarter-device-manager=enabled` node label;
+   `smarter-device-manager` (or equivalent device plugin) running on the
+   notebook nodes. (Installed from the upstream chart with no `nodeSelector`,
+   smarter-device-manager runs only on nodes labelled
+   `smarter-device-manager=enabled`.);
 3. the **automount StorageClass** your `cvmfs` PVC binds to.
 
 Set those up correctly and the rest of the chart works unchanged. A ready

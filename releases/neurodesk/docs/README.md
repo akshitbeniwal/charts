@@ -35,11 +35,11 @@ Published as an OCI artifact at `ghcr.io/neurodesk/charts/neurodesk`.
 | [architecture.md](architecture.md) | What the chart is; the umbrella (remote deps + parent templates) model; in/out scope; component map; the "subchart values can't be templated from sibling toggles" Helm limitation and the opinionated-defaults / overlay workaround. |
 | [values.md](values.md) | Every `values.yaml` key documented in tables, grouped by component, with defaults and "breaks-when-off" notes. |
 | [components.md](components.md) | Per component: what it deploys, the source it was ported from, its toggle, dependencies, and node/cluster prerequisites. |
-| [install.md](install.md) | Prerequisites (Kubernetes ≥ 1.30, the FUSE-label hard gate, the z2jh StorageClass keys, cert-manager, `values.schema.json` fail-fast), `helm dependency build` (honors the committed `Chart.lock`), the required explicit `--namespace`, `helm install` (existing cert-manager / standalone / external SPO), per-component enable/disable + the merge-gotcha cookbook, the `validation.*` guards, the `extraManifests` escape hatch, the `helm template \| kubectl apply` alternative, and **teardown / uninstall** (stop user servers first; the pre-delete cleanup hook; the PVCs it deletes; what stays by design). |
+| [install.md](install.md) | Prerequisites (Kubernetes ≥ 1.30, where the FUSE device plugin runs (no node label needed), the z2jh StorageClass keys, cert-manager, `values.schema.json` fail-fast), `helm dependency build` (honors the committed `Chart.lock`), the required explicit `--namespace`, `helm install` (existing cert-manager / standalone / external SPO), per-component enable/disable + the merge-gotcha cookbook, the `validation.*` guards, the `extraManifests` escape hatch, the `helm template \| kubectl apply` alternative, and **teardown / uninstall** (stop user servers first; the pre-delete cleanup hook; the PVCs it deletes; what stays by design). |
 | [ordering.md](ordering.md) | How one `helm install` handles the install ordering the devstack numbered scripts did by hand: CRD-before-CR, StorageClass-before-PVC, the (non-)SPO-webhook race and SPO's cert-manager dependency, runtime vs install-time deps, and upgrades. |
 | [disabling-components.md](disabling-components.md) | Turning CVMFS/security off across the subchart boundary: the Helm map-merge gotcha (null the **whole submap**, not the leaf) and list-replace (restate what you keep), the external-SPO case, and the `validation.*` guards. |
 | [security.md](security.md) | SPO bundling (upstream 1.0.0, vendored with local patches; fixed `security-profiles-operator` namespace), the cert-manager requirement, the `installOperator` / `assumeCrdsPresent` toggles and SPO guards, shared-cluster collisions (cluster-scoped profile names), AppArmor/Seccomp CRs (what the AppArmor profile allows; seccomp is audit-only + manual attach), the manual node-load fallback, and the singleuser `securityContext` sync caveat. |
-| [cvmfs.md](cvmfs.md) | The `global.cvmfs` single source of truth (server URL + single squid toggle), cvmfs-csi, smarter-device-manager, the `cvmfs` PVC, the probe (scheduling) and trace-parser, the FUSE node label, and running CVMFS yourself. |
+| [cvmfs.md](cvmfs.md) | The `global.cvmfs` single source of truth (server URL + single squid toggle), cvmfs-csi, smarter-device-manager, the `cvmfs` PVC, the probe (scheduling) and trace-parser, where the FUSE device plugin runs, Squid `clientCidrs`, and running CVMFS yourself. |
 | [xnat.md](xnat.md) | Optional XNAT: what the chart ships (extension ConfigMap, NetworkPolicy) vs what stays in ais-devstack (XNAT server + jars); how to enable it. |
 | [secrets.md](secrets.md) | Why secrets never go in `values.yaml`; `existingSecret` / sealed-secrets / SOPS; the exact secrets each deployment needs. |
 | [consuming-from-neurocloud.md](consuming-from-neurocloud.md) | A fresh bundled install vs adopting the chart on an existing neurocloud (reusing the SPO and CVMFS driver owned by its `security` / `mounts` apps, which stay); the multi-source Argo CD `Application`; what neurocloud keeps; why consolidation needs an (unrehearsed) ownership transfer. |
@@ -62,8 +62,9 @@ helm install neurodesk . \
 
 `--namespace` is **required** (the z2jh image-awaiter Job targets `default`
 otherwise). See [install.md](install.md) for prerequisites (Kubernetes ≥ 1.30,
-StorageClass, the `smarter-device-manager=enabled` node label, SPO and
-cert-manager, Prometheus CRDs) and the full walkthrough.
+StorageClass, SPO and cert-manager, Prometheus CRDs) and the full walkthrough.
+No node label is needed for CVMFS: the FUSE device plugin runs on every Linux
+node.
 
 ## Known limitations / fast-follows
 

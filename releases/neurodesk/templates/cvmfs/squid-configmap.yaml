@@ -35,10 +35,10 @@ data:
     http_access deny all
 
     # Cache sizing
-    cache_mem {{ .Values.cvmfs.squid.cacheMemMB }} MB
-    maximum_object_size {{ .Values.cvmfs.squid.maxObjectSizeMB }} MB
+    cache_mem {{ .Values.cvmfs.squid.cacheMemMB | int }} MB
+    maximum_object_size {{ .Values.cvmfs.squid.maxObjectSizeMB | int }} MB
     maximum_object_size_in_memory 128 KB
-    cache_dir aufs /var/spool/squid {{ .Values.cvmfs.squid.cacheDirSizeMB }} 16 256
+    cache_dir aufs /var/spool/squid {{ .Values.cvmfs.squid.cacheDirSizeMB | int }} 16 256
     cache_replacement_policy heap LFUDA
     memory_replacement_policy heap GDSF
 

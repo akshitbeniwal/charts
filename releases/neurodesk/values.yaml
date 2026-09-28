@@ -66,7 +66,10 @@ namespace:
   # If true, render a Namespace object (use with care under --create-namespace).
   create: false
   name: ""                 # "" => release namespace
-  podSecurityLabels: {}    # e.g. { pod-security.kubernetes.io/enforce: baseline }
+  # e.g. { pod-security.kubernetes.io/enforce: privileged }. NOT baseline/restricted
+  # while cvmfs.enabled: the cvmfs-csi node plugin is privileged and
+  # smarter-device-manager uses hostNetwork, both in the release namespace.
+  podSecurityLabels: {}
 
 # ============================================================================
 # JupyterHub (upstream Zero-to-JupyterHub z2jh) — key: jupyterhub
@@ -237,9 +240,15 @@ cvmfs:
     # and fails to start where that is huge (e.g. 1073741816 under kind).
     maxFileDescriptors: 65536
     maxObjectSizeMB: 1024
+    # Who may use the proxy. Squid is a ClusterIP Service, so only in-cluster
+    # clients can reach it anyway; the private ranges cover the pod networks of
+    # k3s (10.42/16), k0s and kubeadm (10.244/16) and most managed clusters.
+    # (0.1.x defaulted to the k3s ranges only: squid answered 403 elsewhere and
+    # CVMFS silently fell back to DIRECT, uncached.)
     clientCidrs:
-      - 10.42.0.0/16
-      - 10.43.0.0/16
+      - 10.0.0.0/8
+      - 172.16.0.0/12
+      - 192.168.0.0/16
     # The cache index costs ~10 MB per GB of cache_dir (cacheDirSizeMB 50000 =>
     # ~500 MB) on top of cacheMemMB; an OOM loop takes the Recreate/RWO proxy
     # fully offline. Scale the memory limit with cacheDirSizeMB.
@@ -333,6 +342,15 @@ cvmfs-csi:
 
 # Remote subchart: smarter-device-manager. Exposes /dev/fuse to pods.
 smarter-device-manager:
+  # Run the FUSE device plugin on every (untainted) Linux node. Without a
+  # nodeSelector the upstream chart falls back to a hard-coded
+  # `smarter-device-manager: enabled` selector, which made every install label
+  # its nodes by hand. Keys you set in an overlay are ADDED to this one (a node
+  # must match all of them), e.g. {smarter-device-manager: enabled} restores
+  # the old label gate. The upstream chart tolerates only the taint
+  # smarter.type=edge, so nodes with other NoSchedule taints are skipped.
+  nodeSelector:
+    kubernetes.io/os: linux
   config:
     - devicematch: ^fuse$
       nummaxdevices: 150
@@ -511,7 +529,9 @@ uninstallCleanup:
   enabled: true
   # kubectl, matching the minor of the clusters this chart is tested on.
   image: registry.k8s.io/kubectl:v1.35.9@sha256:436cbaa8a019152063d638f412cf9d73ec29e56061529d28cbc231c6ab1b37a4
-  # Per step; keep it below `helm uninstall --timeout` (default 5m).
+  # Per step. Helm's own `helm uninstall --timeout` (default 5m) covers the
+  # WHOLE hook Job, so steps x timeoutSeconds beyond it only matter on failure;
+  # pass a larger --timeout if a step is expected to be slow.
   timeoutSeconds: 120
   resources:
     requests: {cpu: 10m, memory: 32Mi}

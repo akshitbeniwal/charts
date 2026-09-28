@@ -13,7 +13,7 @@ has none).
 | --- | --- | --- |
 | **Kubernetes ≥ 1.30** | `Chart.yaml` sets `kubeVersion: ">=1.30.0-0"`: the default singleuser AppArmor attachment uses the **native** `securityContext.appArmorProfile` field (added in k8s 1.30 as beta, on by default; GA in 1.31; silently ignored, so unenforced, on older clusters). z2jh 4.4 needs ≥1.28 — this is the stricter bound. | `helm install` aborts on clusters below 1.30. |
 | A **StorageClass** | Hub DB PVC + per-user home PVCs (RWO) + this chart's in-house PVCs (Squid cache). | The hub DB / home PVCs are set on the **z2jh** keys `jupyterhub.hub.db.pvc.storageClassName` and `jupyterhub.singleuser.storage.dynamic.storageClass` (`global.storageClassName` covers only this chart's in-house PVCs and does **not** reach them). Unset => cluster default. Do not set the hub DB key to `""`: that means "no StorageClass" and the hub DB PVC never binds (see [values.md](values.md); the one exception is an in-place upgrade from 0.1.x). |
-| **FUSE node label** (hard prereq when `cvmfs.enabled=true`) | smarter-device-manager has a `nodeSelector` on this label. **No** labelled node => the DaemonSet schedules nowhere => `smarter-devices/fuse` is advertised nowhere => **every** singleuser spawn stays `Pending`. | `kubectl label node --all smarter-device-manager=enabled --overwrite` |
+| **Untainted Linux nodes for notebooks** (when `cvmfs.enabled=true`) | The FUSE device plugin (smarter-device-manager) must run where notebooks run, or `smarter-devices/fuse` is advertised nowhere and **every** spawn stays `Pending`. It runs on every Linux node by default; no node label is needed. | `smarter-device-manager.nodeSelector` (default `kubernetes.io/os: linux`). It tolerates only the `smarter.type=edge` taint. |
 | **Security Profiles Operator** | Loads AppArmor/Seccomp profiles onto nodes. Bundled (upstream 1.0.0) & ON by default; runs in namespace `security-profiles-operator`. | `security.installOperator` — set `false` only if SPO ≥ 1.0.0 is already installed. |
 | **cert-manager** (required when `security.installOperator=true`) | SPO's webhook and metrics certificates and its CRD conversion CA. | Either already running in the cluster, or installed by this release with `cert-manager.enabled=true` (only on a cluster with **no** cert-manager). The render fails if neither holds. |
 | **Prometheus Operator CRDs** | Needed before any ServiceMonitor renders. | `infra.monitoring.serviceMonitors` / `cvmfs.traceParser.enabled`. Leave monitoring off unless `monitoring.coreos.com` CRDs exist. |
@@ -21,18 +21,22 @@ has none).
 | **cert-manager Issuer** (optional) | TLS for the Hub ingress. | `cert-manager.io/cluster-issuer` under `jupyterhub.ingress.annotations`, plus `jupyterhub.ingress.tls`. |
 | **External XNAT server** (optional) | Target for the XNAT upload extension. | `xnat.server.host` / `xnat.server.namespace`. |
 
-### Label nodes for FUSE (required when `cvmfs.enabled=true`)
+### The FUSE device plugin (no node label needed)
 
-```sh
-kubectl label node --all smarter-device-manager=enabled --overwrite
-```
+With `cvmfs.enabled=true` the chart runs smarter-device-manager, which
+advertises `smarter-devices/fuse`, on **every Linux node**
+(`smarter-device-manager.nodeSelector: {kubernetes.io/os: linux}`). Earlier
+versions left the selector empty, and the upstream chart then falls back to a
+hard-coded `smarter-device-manager: enabled` selector, which is why nodes had to
+be labelled by hand. That label is no longer needed.
 
-This is a **hard gate**, not a soft/eventual prereq. The
-`smarter-device-manager` DaemonSet selects on this label, so without it the
-DaemonSet runs on **zero** nodes, `smarter-devices/fuse` is allocatable
-**nowhere**, and every singleuser spawn stays `Pending` forever. Nothing in the
-install errors — it just never works at spawn time. Label nodes **before** anyone
-spawns.
+To limit the plugin to some nodes, set `smarter-device-manager.nodeSelector` in
+your overlay. Helm **merges** it with the default, so your keys are added to
+`kubernetes.io/os: linux` and a node must match both. Do not null the default
+key: across the subchart boundary the `null` survives into the rendered
+selector. The plugin tolerates only the `smarter.type=edge` taint (hard-coded
+upstream), so it does not run on nodes with other `NoSchedule` taints; a
+notebook scheduled there stays `Pending`.
 
 ### Security Profiles Operator
 

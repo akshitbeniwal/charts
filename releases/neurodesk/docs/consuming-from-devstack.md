@@ -46,9 +46,9 @@ with `xnat.enabled=true`.
 Replace the numbered JupyterHub scripts with:
 
 ```sh
-# 1. Prereqs devstack already does elsewhere: StorageClass (Longhorn), nfs-server,
-#    and the FUSE node label for CVMFS:
-kubectl label node --all smarter-device-manager=enabled --overwrite
+# 1. Prereqs devstack already does elsewhere: StorageClass (Longhorn) and
+#    nfs-server. (No FUSE node label is needed any more: the chart runs its FUSE
+#    device plugin on every Linux node.)
 
 # 2. Vendor subcharts (from a source checkout; skip if installing the OCI artifact).
 #    Chart.lock is committed, so add the two HTTP repos and `build` (honors the lock):
