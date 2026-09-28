@@ -4,7 +4,10 @@ This page is the consolidated **omit/keep** reference for moving both
 deployments onto the `neurodesk` chart, plus a safe rollout plan. For the
 how-to detail, see [consuming-from-neurocloud.md](consuming-from-neurocloud.md)
 and [consuming-from-devstack.md](consuming-from-devstack.md). Upgrading an
-existing release from chart 0.1.x is covered in [0.1.x -> 0.2.0](#01x---020).
+existing release from chart 0.1.x is covered in [0.1.x -> 0.2.0](#01x---020),
+from 0.2.x in [0.2.x -> 0.3.0](#02x---030), and moving the AIS umbrella chart
+from its own JupyterHub to this chart in
+[AIS umbrella chart 1.x -> 2.0](#ais-umbrella-chart-1x---20).
 
 ## The big picture
 
@@ -140,6 +143,48 @@ Roll back by reverting the branch. In neurocloud case (b) nothing else changed,
 so removing the new `Application` leaves the old apps as they were. Never run
 two JupyterHub releases in the same namespace: z2jh's in-namespace names are
 fixed.
+
+## AIS umbrella chart 1.x -> 2.0
+
+ais 2.0 (`releases/ais` in Australian-Imaging-Service/charts) replaces its
+plain `jupyterhub` dependency (z2jh 4.3) with this chart:
+
+- Move the top-level `jupyterhub:` values block under `neurodesk.jupyterhub:`.
+  ais 2.0 refuses to render while the old block exists, so an old
+  `jupyterhub.enabled: false` cannot silently turn into a running hub. To
+  install XNAT/CTP without a hub, set `neurodesk.enabled: false`.
+- New prerequisites: Kubernetes >= 1.30, AppArmor on the nodes, cert-manager
+  (or `neurodesk.cert-manager.enabled: true`), a single bundled Security
+  Profiles Operator per cluster, and a `ReadWriteMany` StorageClass for XNAT's
+  volumes, which now include `workspaces`.
+- The hub is a new z2jh 4.4 install with its own names (`hub`, `proxy-public`,
+  database PVC `hub-db-dir`): users, API tokens and server records of the ais
+  1.x hub are not carried over. Before relying on existing homes, compare the
+  users' PVC names (`kubectl get pvc`) with `claim-{username}`.
+- XNAT is wired to the hub by the umbrella; XNAT's own JupyterHub settings are
+  still entered once in XNAT ([xnat.md](xnat.md#under-the-ais-umbrella)).
+
+## 0.2.x -> 0.3.0
+
+New, all off by default: servers launched from XNAT (`xnat.jupyterhub.*`), the
+AAF login preset (`auth.aaf.*`), and the hub-side wiring for the AIS umbrella
+chart. See [xnat.md](xnat.md). One default changes:
+
+- **`jupyterhub.singleuser.storage.dynamic.pvcNameTemplate: claim-{username}`**
+  (z2jh's default was `claim-{user_server}`). All of a user's servers now share
+  one home. Default servers are unaffected: the name is the same for them.
+  Releases that allowed named servers before get the user's default home in
+  every named server from now on; the old per-server PVCs
+  (`claim-<user>--<server>`) are left in place, no longer mounted, and not
+  deleted by KubeSpawner. Copy anything needed from them, then delete them. To
+  keep per-server homes, set `pvcNameTemplate: claim-{user_server}` in your
+  overlay (KubeSpawner 7.1 then deletes a named server's home when the server
+  is removed).
+- `xnat.server.host` may now be empty (`<release>-xnat-web`). The singleuser
+  NetworkPolicy `singleuser-egress-xnat` now also renders for XNAT in the same
+  namespace (then only XNAT's pods, `xnat.server.podLabels`/`port`), and it is
+  no longer rendered when z2jh's singleuser NetworkPolicy is off (alone it
+  limited notebook egress to DNS and XNAT).
 
 ## 0.1.x -> 0.2.0
 

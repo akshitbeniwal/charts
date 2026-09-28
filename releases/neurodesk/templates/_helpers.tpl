@@ -70,3 +70,20 @@ http://cvmfs-squid.{{ include "neurodesk.namespace" . }}.svc.cluster.local:3128;
 DIRECT
 {{- end -}}
 {{- end -}}
+
+{{/*
+XNAT host as seen from inside the cluster: xnat.server.host, or the in-cluster
+Service of the AIS xnat chart installed in the SAME release (the AIS umbrella
+names it <release>-xnat-web).
+*/}}
+{{- define "neurodesk.xnatHost" -}}
+{{- .Values.xnat.server.host | default (printf "%s-xnat-web" .Release.Name) -}}
+{{- end -}}
+
+{{/* ServiceAccount the z2jh hub runs as (for RBAC this chart adds). */}}
+{{- define "neurodesk.hubServiceAccount" -}}
+{{- $ju := .Values.jupyterhub | default dict -}}
+{{- $sa := dig "hub" "serviceAccount" "name" "" $ju -}}
+{{- if $sa -}}{{ $sa }}{{- else if $ju.fullnameOverride -}}{{ printf "%s-hub" $ju.fullnameOverride }}{{- else -}}hub{{- end -}}
+{{- end -}}
+

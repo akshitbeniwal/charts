@@ -204,7 +204,7 @@ data:
                 if not alias or not secret:
                     return self.write_json({'valid': False, 'error': 'Alias and secret required'}, 400)
 
-                xnat_url = os.environ.get('XNAT_URL', 'http://{{ .Values.xnat.server.host }}')
+                xnat_url = os.environ.get('XNAT_URL', 'http://{{ include "neurodesk.xnatHost" . }}')
                 session = xnat.connect(xnat_url, user=alias, password=secret)
                 username = session.logged_in_user
 
@@ -997,7 +997,7 @@ data:
             if not xnat:
                 return self.send_json({'valid': False, 'error': 'xnat library not installed'}, 500)
             try:
-                xnat_url = os.environ.get('XNAT_URL', 'http://{{ .Values.xnat.server.host }}')
+                xnat_url = os.environ.get('XNAT_URL', 'http://{{ include "neurodesk.xnatHost" . }}')
                 xnat_session = xnat.connect(xnat_url, user=alias, password=secret)
                 authenticated_user = xnat_session.logged_in_user
                 self.send_json({'valid': True, 'username': authenticated_user, 'xnat_url': xnat_url})

@@ -588,6 +588,11 @@ jupyterhub:
     storage:
       capacity: 10Gi
       homeMountPath: /home/jovyan
+      # ais-devstack's existing homes are named jupyter-{username} (one per
+      # user, shared by its XNAT-launched servers). Keep that name, or every
+      # user starts with an empty home after moving to this chart.
+      dynamic:
+        pvcNameTemplate: jupyter-{username}
       # ----------------------------------------------------------------------
       # LIST REPLACE WARNING: extraVolumes/extraVolumeMounts REPLACE the chart
       # defaults wholesale. The cvmfs + shm volumes are RESTATED here on

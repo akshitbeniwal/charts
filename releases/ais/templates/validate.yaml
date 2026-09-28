@@ -1,0 +1,21 @@
+{{- /*
+Render-time guards for the AIS umbrella (fail fast instead of a silently
+different install).
+*/ -}}
+
+{{- /* ais 2.0 replaced the plain `jupyterhub` dependency with `neurodesk`
+       (which brings its own JupyterHub). A leftover top-level `jupyterhub:`
+       block would otherwise be ignored silently: `jupyterhub.enabled=false`
+       would no longer turn the hub off, and hub auth/ingress/storage overrides
+       would not apply. */ -}}
+{{- if hasKey .Values "jupyterhub" }}
+  {{- fail "ais: the top-level `jupyterhub:` values block is from ais 1.x and is no longer used. ais 2.0 installs JupyterHub through `neurodesk`: move hub/singleuser/ingress/auth settings under `neurodesk.jupyterhub:`, and use `neurodesk.enabled: false` to install without a hub. See releases/neurodesk/docs/migration.md." }}
+{{- end }}
+
+{{- /* Neurodesk pins AppArmor through the pod securityContext field, which the
+       API server ignores before Kubernetes 1.30 (notebooks would run
+       unconfined). Helm does not enforce a subchart's kubeVersion, so check it
+       here; an XNAT/CTP-only install (neurodesk.enabled=false) is unaffected. */ -}}
+{{- if and .Values.neurodesk .Values.neurodesk.enabled (semverCompare "<1.30.0-0" .Capabilities.KubeVersion.Version) }}
+  {{- fail (printf "ais: neurodesk needs Kubernetes >= 1.30 (this cluster: %s). Upgrade the cluster or set neurodesk.enabled=false." .Capabilities.KubeVersion.Version) }}
+{{- end }}

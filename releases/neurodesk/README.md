@@ -34,16 +34,19 @@ combination.
   (`cert-manager.enabled=true`, off by default) on a cluster that has none.
 - JupyterHub glue: RBAC + ConfigMaps for home auto-resize, fluent-bit logging
   and shared teaching / group storage.
-- Optional XNAT notebook-side integration: the JupyterLab XNAT-upload extension
-  ConfigMap + a NetworkPolicy allowing egress to an external XNAT server.
+- Optional XNAT integration: servers launched from XNAT (XNAT's image,
+  resources and data, mounted read-only), the JupyterLab XNAT-upload extension,
+  and the NetworkPolicies between hub, notebooks and XNAT. Wired automatically
+  under the AIS umbrella chart, where XNAT is in the same release.
+- Optional AAF login preset with usernames matching XNAT's.
 
 **Out of scope** (consumed by name through `global` / `infra`, never installed):
 
 - Cluster infrastructure — StorageClass (Longhorn / NFS / …), ingress
   controller, cert-manager and its `Issuer` (unless you opt in to installing
   cert-manager as above), the Prometheus Operator stack, ArgoCD.
-- The **XNAT server** itself and its server-side plugins/jars — those stay in
-  ais-devstack.
+- The **XNAT server** itself and its configuration — XNAT is installed by the
+  AIS xnat chart (or ais-devstack) and configured in XNAT.
 - Cluster-wide security infrastructure (cryptnono, DNS egress filter) — those
   remain the deployment's *infrastructure* layer.
 
@@ -114,6 +117,8 @@ toggle. See [docs/values.md](docs/values.md) for the full key reference.
 | Glue — shared teaching | `jupyterGlue.sharedTeaching.enabled` (`false`) | in-house | instructor RWX PVCs + RBAC |
 | Glue — shared group storage | `jupyterGlue.sharedGroupStorage.enabled` (`false`) | in-house | RBAC to reconcile per-group RWX storage |
 | XNAT integration | `xnat.enabled` (`false`) | in-house | XNAT-upload extension ConfigMap + NetworkPolicy |
+| XNAT-launched servers | `xnat.jupyterhub.enabled` (`false`) | in-house | hub pre-spawn hook (ConfigMap), Role on XNAT's credentials Secret, hub<->XNAT NetworkPolicy |
+| AAF login | `auth.aaf.enabled` (`false`) | in-house | AAF OpenID Connect authenticator preset |
 | Extra manifests | `extraManifests` (`[]`) | in-house | arbitrary user-supplied manifests, rendered as-is |
 
 ## Documentation
@@ -134,7 +139,8 @@ Full docs live in [`docs/`](docs/):
   the profile CRs, sync caveats.
 - [cvmfs.md](docs/cvmfs.md) — the `global.cvmfs` single source of truth, the CVMFS
   topology and the "run CVMFS yourself" path.
-- [xnat.md](docs/xnat.md) — what the chart ships vs. what stays in ais-devstack.
+- [xnat.md](docs/xnat.md) — servers launched from XNAT, the AIS umbrella wiring,
+  the XNAT-side settings, AAF login and the upload extension.
 - [secrets.md](docs/secrets.md) — why secrets never go in `values.yaml`.
 - [consuming-from-neurocloud.md](docs/consuming-from-neurocloud.md) /
   [consuming-from-devstack.md](docs/consuming-from-devstack.md) /

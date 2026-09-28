@@ -2,17 +2,20 @@
 Optional NetworkPolicy: allow JupyterHub singleuser pods egress to the
 EXTERNAL XNAT server's namespace so the xnat-upload extension can reach it.
 
-Only rendered when xnat is enabled AND xnat.server.namespace is set — if the
-XNAT server is reached by some other path (public DNS, no NetworkPolicy
-enforcement in the cluster, etc.) leave xnat.server.namespace empty and this
-manifest is skipped. The XNAT server itself is NOT deployed by this chart;
-this policy only opens the egress path to wherever it already runs.
+Rendered when xnat is enabled. With xnat.server.namespace set it allows that
+whole namespace; without it (XNAT in the same namespace, as in the AIS
+umbrella) only the XNAT web pods (xnat.server.podLabels) on xnat.server.port.
+The XNAT server itself is NOT deployed by this chart.
 
 singleuser pods are labelled by z2jh (the jupyterhub subchart) with
 `component: singleuser-server`; we select them by that label rather than the
 neurodesk.selectorLabels (which the subchart's pods do not carry).
+
+Only rendered while z2jh's own singleuser NetworkPolicy is on: this policy only
+ADDS an allowance to it. Alone it would cut the notebooks' egress down to DNS
+and XNAT.
 */ -}}
-{{- if and .Values.xnat.enabled .Values.xnat.server.namespace }}
+{{- if and .Values.xnat.enabled (dig "singleuser" "networkPolicy" "enabled" true (.Values.jupyterhub | default dict)) }}
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -35,9 +38,20 @@ spec:
           port: 53
         - protocol: TCP
           port: 53
-    # Allow traffic to any pod in the XNAT server's namespace.
+    {{- if .Values.xnat.server.namespace }}
+    # XNAT in another namespace: allow that namespace.
     - to:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: {{ .Values.xnat.server.namespace | quote }}
+    {{- else }}
+    # XNAT in this namespace (the AIS umbrella): only its web pods, only its
+    # HTTP port - not the rest of the namespace (e.g. XNAT's PostgreSQL).
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- toYaml .Values.xnat.server.podLabels | nindent 14 }}
+      ports:
+        - port: {{ .Values.xnat.server.port }}
+    {{- end }}
 {{- end }}

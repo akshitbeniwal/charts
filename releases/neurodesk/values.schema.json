@@ -88,7 +88,25 @@
       "properties": {
         "enabled": { "type": "boolean" },
         "server": { "type": "object" },
-        "uploadExtension": { "type": "object" }
+        "uploadExtension": { "type": "object" },
+        "jupyterhub": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "url": { "type": "string" },
+            "credentialsSecret": { "type": "string" },
+            "usernameKey": { "type": "string" },
+            "passwordKey": { "type": "string" },
+            "archivePvc": { "type": "string" },
+            "archiveMountPath": { "type": "string" },
+            "archiveGid": { "type": "integer", "minimum": 0 },
+            "uid": { "type": "integer" },
+            "gid": { "type": "integer" },
+            "requestTimeoutSeconds": { "type": "integer", "minimum": 1 },
+            "failOpen": { "type": "boolean" }
+          }
+        }
       }
     },
     "validation": {
@@ -102,6 +120,25 @@
         "apparmorNameMismatch": { "type": "boolean" },
         "apparmorNoCrdProvider": { "type": "boolean", "description": "No effect since chart 0.2.0 (its guard was removed; the SPO API-discovery guard replaced it). Still accepted so existing overlays validate." },
         "certManagerMissing": { "type": "boolean", "description": "Bypass the check that the bundled Security Profiles Operator has cert-manager (cert-manager.enabled=true, or cert-manager.io/v1 Certificate served by the cluster)." }
+      }
+    },
+    "auth": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "aaf": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "clientId": { "type": "string" },
+            "callbackUrl": { "type": "string" },
+            "usernamePrefix": { "type": "string" },
+            "usernameClaim": { "type": "string", "minLength": 1 },
+            "allowAll": { "type": "boolean" },
+            "issuer": { "type": "string" }
+          }
+        }
       }
     },
     "uninstallCleanup": {

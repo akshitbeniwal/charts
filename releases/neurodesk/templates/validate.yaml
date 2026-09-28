@@ -132,3 +132,14 @@ know better (e.g. you supply FUSE from a different device plugin).
 {{- if hasKey (dig "uploadExtension" (dict) (.Values.xnat | default dict)) "installerImage" }}
   {{- fail "neurodesk: xnat.uploadExtension.installerImage was removed in chart 0.2.0 - it never reached any manifest. The XNAT extension installer image is chosen by the spawner: set jupyterhub.hub.extraEnv.XNAT_EXT_INSTALLER_IMAGE instead (see examples/devstack-values.yaml), and delete the old key. (Chart 0.1.x set it by default, so it also appears when upgrading with --reuse-values; upgrade with your own values files instead.)" }}
 {{- end }}
+
+{{- /* ---- 7. hub integrations need their inputs ---- */ -}}
+{{- $xj := dig "jupyterhub" (dict) (.Values.xnat | default dict) -}}
+{{- if and (dig "enabled" false $xj) (not .Values.xnat.enabled) }}
+  {{- fail "neurodesk: xnat.jupyterhub.enabled=true needs xnat.enabled=true (it wires the hub to that XNAT)." }}
+{{- end }}
+{{- $aaf := dig "aaf" (dict) (.Values.auth | default dict) -}}
+{{- if and (dig "enabled" false $aaf) (or (not $aaf.clientId) (not $aaf.callbackUrl)) }}
+  {{- fail "neurodesk: auth.aaf.enabled=true needs auth.aaf.clientId and auth.aaf.callbackUrl (https://<hub host>/hub/oauth_callback). The client secret goes in Secret neurodesk-aaf, key client-secret." }}
+{{- end }}
+

@@ -102,7 +102,7 @@ spec:
     # 1. The chart. Its value file comes from source 2 via the `$values` ref.
     - repoURL: ghcr.io/neurodesk/charts
       chart: neurodesk
-      targetRevision: 0.2.0           # pin the chart version
+      targetRevision: 0.3.0           # pin the chart version
       helm:
         releaseName: neurodesk
         valueFiles:

@@ -272,16 +272,39 @@ spawner-side wiring lives in the `jupyterhub.hub.extraConfig` overlay.
 
 ## `xnat` — optional XNAT integration (in-house)
 
-Toggle: **`xnat.enabled`**. Notebook-side integration only — the XNAT **server**
-and its server-side plugins stay in ais-devstack. See [xnat.md](xnat.md).
+Toggle: **`xnat.enabled`**. The chart never deploys or configures XNAT itself;
+under the AIS umbrella XNAT is in the same release. See [xnat.md](xnat.md).
 
 | Key | Default | Description | Breaks-when-off |
 | --- | --- | --- | --- |
 | `xnat.enabled` | `false` | Provision the in-cluster XNAT integration objects. | No XNAT extension ConfigMap / NetworkPolicy. |
-| `xnat.server.host` | `""` | Host of an external XNAT server reachable from the cluster (e.g. `xnat-web.ais-xnat.svc.cluster.local`). | Upload extension has no target. |
-| `xnat.server.namespace` | `""` | Namespace the singleuser NetworkPolicy allows egress to. | NetworkPolicy can't scope egress to XNAT. |
+| `xnat.server.host` | `""` | In-cluster host of XNAT. `""` = `<release>-xnat-web`, the AIS xnat chart's Service in the same release. | n/a |
+| `xnat.server.namespace` | `""` | XNAT's namespace when it is not the release namespace (NetworkPolicies then allow that namespace). `""` = same namespace: policies select `xnat.server.podLabels` on `xnat.server.port`. | n/a |
+| `xnat.server.podLabels` | `app.kubernetes.io/name: xnat-web` | Labels of XNAT's pods (same-namespace NetworkPolicies). | n/a |
+| `xnat.server.port` | `8080` | XNAT's container port (same-namespace NetworkPolicies). | n/a |
+| `xnat.jupyterhub.enabled` | `false` | Servers launched from XNAT: pre-spawn hook, Role on the credentials Secret, hub<->XNAT NetworkPolicy, named servers on. Needs `xnat.enabled`. | XNAT-launched servers get the chart defaults, no XNAT data. |
+| `xnat.jupyterhub.url` | `""` | XNAT base URL for the hook. `""` = `http://<xnat.server.host>`. | n/a |
+| `xnat.jupyterhub.credentialsSecret` | `""` | Secret with the XNAT account the hook uses (`usernameKey`/`passwordKey`, default `username`/`password`). `""` = `<release>-xnat-web-admin`. | Spawns fail (or use defaults with `failOpen`). |
+| `xnat.jupyterhub.archivePvc` | `""` | PVC with XNAT's archive, in the release namespace. `""` = `<release>-xnat-web-archive`. | No XNAT data in notebooks. |
+| `xnat.jupyterhub.archiveMountPath` | `/data/xnat/archive` | XNAT's path of that PVC; launch mounts under it become read-only subPaths, others are refused. | n/a |
+| `xnat.jupyterhub.archiveGid` | `65534` | Supplemental group for pods with XNAT data (XNAT writes its archive 0750/0640 as 65534:65534). | Data mounted but unreadable. |
+| `xnat.jupyterhub.uid` / `gid` | `1000` / `100` | `NB_UID`/`NB_GID` for non-Neurodesk XNAT images. | n/a |
+| `xnat.jupyterhub.requestTimeoutSeconds` | `10` | Timeout of the call to XNAT at spawn. | n/a |
+| `xnat.jupyterhub.failOpen` | `false` | XNAT unreachable or erroring: `false` fails the spawn, `true` spawns the chart defaults. A 404 always spawns the defaults. | n/a |
 | `xnat.uploadExtension.enabled` | `true` | Install the JupyterLab XNAT-upload extension ConfigMap. | No upload extension. (Only relevant when `xnat.enabled`.) |
 | `xnat.uploadExtension.installerImage` | *(removed in 0.2.0)* | Setting it fails the render: in 0.1.x it reached no manifest. Set `jupyterhub.hub.extraEnv.XNAT_EXT_INSTALLER_IMAGE` instead (Python minor must match the neurodesktop image's, 3.13). | n/a |
+
+## `auth` — login presets
+
+| Key | Default | Description |
+| --- | --- | --- |
+| `auth.aaf.enabled` | `false` | AAF OpenID Connect login (sets `JupyterHub.authenticator_class`). Client secret: Secret `neurodesk-aaf`, key `client-secret`. |
+| `auth.aaf.clientId` | `""` | AAF client id (required when enabled). |
+| `auth.aaf.callbackUrl` | `""` | `https://<hub host>/hub/oauth_callback`, including `hub.baseUrl` (required when enabled). |
+| `auth.aaf.usernamePrefix` | `aaf_` | Prefix of hub usernames. |
+| `auth.aaf.usernameClaim` | `sub` | OIDC claim after the prefix. Prefix + claim must equal the XNAT username (see [xnat.md](xnat.md#aaf-login)). |
+| `auth.aaf.allowAll` | `true` | Any AAF user may log in. `false`: only users you allow (e.g. `jupyterhub.hub.config.AAFOAuthenticator.allowed_users`); oauthenticator admits nobody without an allow rule. |
+| `auth.aaf.issuer` | `https://central.aaf.edu.au` | AAF base URL (`https://central.test.aaf.edu.au` for the test federation). |
 
 ## `validation` — render-time consistency guards
 
@@ -304,12 +327,14 @@ enforce it.)
 | `validation.certManagerMissing` | `false` | Fails if `security.installOperator=true`, `cert-manager.enabled=false` and the cluster does not serve `cert-manager.io/v1` `Certificate` (guard 5c). Offline, assert it with `--api-versions cert-manager.io/v1/Certificate` instead of bypassing. |
 | `validation.apparmorNoCrdProvider` | *(removed)* | **No effect since 0.2.0.** Its guard was removed: the profile CRs now always render when enabled, and guard 5b checks for SPO instead. Still accepted so existing overlays validate. |
 
-Three guards have **no** bypass flag: 5a (the cluster serves only the legacy
+Four guards have **no** bypass flag: 5a (the cluster serves only the legacy
 pre-1.0 SPO API while `installOperator=true`; see
 [migration.md](migration.md#01x---020)), 5b (`installOperator=false` but the
 cluster does not serve the SPO `v1` kinds; assert with `--api-versions` or
-`security.assumeCrdsPresent=true` when rendering offline), and 6 (the removed
-`xnat.uploadExtension.installerImage` key is set). See
+`security.assumeCrdsPresent=true` when rendering offline), 6 (the removed
+`xnat.uploadExtension.installerImage` key is set) and 7
+(`xnat.jupyterhub.enabled` without `xnat.enabled`, or `auth.aaf.enabled` without
+`clientId` and `callbackUrl`). See
 [security.md](security.md#how-the-chart-checks-for-spo).
 
 ## `uninstallCleanup` — pre-delete cleanup hook

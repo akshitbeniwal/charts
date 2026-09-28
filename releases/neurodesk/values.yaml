@@ -104,6 +104,16 @@ jupyterhub:
         smarter-devices/fuse: "1"
     storage:
       capacity: 50Gi
+      dynamic:
+        # ONE home per user, shared by all of that user's servers. With z2jh's
+        # default (claim-{user_server}) every named server gets its own empty
+        # home, and KubeSpawner >= 7.1 DELETES it when the server is removed.
+        # XNAT launches a new timestamped named server each time and removes it
+        # when it stops, so work done there was lost. KubeSpawner never deletes
+        # a home shared this way on named-server removal. Default servers keep
+        # their existing PVC: claim-{username} == claim-{user_server} for them.
+        # With ReadWriteOnce homes a user's concurrent servers need the same node.
+        pvcNameTemplate: claim-{username}
       # `cvmfs` PVC is created by this chart's templates when cvmfs.enabled.
       extraVolumes:
         - name: cvmfs
@@ -153,6 +163,33 @@ jupyterhub:
         admin_users: []
       KubeSpawner:
         http_timeout: 120
+    # Neurodesk integrations (XNAT-launched servers, AAF login). The chart
+    # renders ConfigMap `neurodesk-hub-integration` only when xnat.jupyterhub or
+    # auth.aaf is enabled, and the mount is optional, so this is inert
+    # otherwise. hub.extraVolumes/extraVolumeMounts are LISTS: an overlay that
+    # sets its own replaces these entries, so re-add them there.
+    extraVolumes:
+      - name: neurodesk-integration
+        configMap:
+          name: neurodesk-hub-integration
+          optional: true
+    extraVolumeMounts:
+      - name: neurodesk-integration
+        mountPath: /etc/neurodesk/integration
+        readOnly: true
+    extraEnv:
+      NEURODESK_AAF_CLIENT_SECRET:
+        valueFrom:
+          secretKeyRef:
+            name: neurodesk-aaf
+            key: client-secret
+            optional: true
+    extraConfig:
+      10-neurodesk-integrations: |
+        import os
+        _ndi_path = "/etc/neurodesk/integration/neurodesk_integrations.py"
+        if os.path.exists(_ndi_path):
+            exec(compile(open(_ndi_path).read(), _ndi_path, "exec"))
     # Hub state DB PVC StorageClass. Left UNSET here (=> cluster default). This
     # is the REAL knob for the hub DB (global.storageClassName does NOT reach
     # it). Do not default it to "": z2jh renders any string verbatim, and an
@@ -453,6 +490,29 @@ cert-manager:
     keep: true
 
 # ============================================================================
+# Login presets — key: auth
+# aaf: Australian Access Federation OpenID Connect. Sets the authenticator,
+# endpoints and a username prefix matching XNAT's OpenID plugin (<provider>_<sub>,
+# so hub and XNAT agree on usernames). Supply the client secret yourself as
+# Secret `neurodesk-aaf` key `client-secret` in the release namespace.
+# ============================================================================
+auth:
+  aaf:
+    enabled: false
+    clientId: ""
+    callbackUrl: ""          # https://<hub host>/hub/oauth_callback (include jupyterhub.hub.baseUrl)
+    # Hub username = <usernamePrefix><usernameClaim>, case kept. It MUST equal
+    # the username XNAT's OpenID plugin gives the same person (by default
+    # <provider id>_<sub>): XNAT starts servers for its own username, and a
+    # different hub name means a second hub user and a 403.
+    usernamePrefix: aaf_
+    usernameClaim: sub
+    # Any AAF user may log in (as in the other AIS hub deployments). false:
+    # nobody may until you list them, e.g.
+    # jupyterhub.hub.config.AAFOAuthenticator.allowed_users.
+    allowAll: true
+
+# ============================================================================
 # Neurodesk JupyterHub glue — key: jupyterGlue (in-house parent templates)
 # RBAC + ConfigMaps for home auto-resize, fluent-bit logging sidecar, and
 # shared storage. These provision the cluster-side objects; the spawner-side
@@ -486,10 +546,46 @@ jupyterGlue:
 # ============================================================================
 xnat:
   enabled: false
-  # Host of an EXTERNAL XNAT server reachable from the cluster.
   server:
-    host: ""        # e.g. xnat-web.ais-xnat.svc.cluster.local
-    namespace: ""   # namespace the singleuser NetworkPolicy should allow egress to
+    # XNAT host as seen from inside the cluster. "" => <release>-xnat-web, the
+    # Service of the AIS xnat chart installed in the SAME release (the AIS
+    # umbrella chart). Set it for an XNAT elsewhere.
+    host: ""
+    # XNAT's namespace when it is NOT this release's namespace (egress policy
+    # then allows that whole namespace). "" => same namespace: policies target
+    # the XNAT pods below on `port`.
+    namespace: ""
+    podLabels:
+      app.kubernetes.io/name: xnat-web
+    port: 8080
+  # Hub side: servers launched BY XNAT (XNAT's JupyterHub plugin). The hub asks
+  # XNAT for each launch's image, resources and archive mounts at spawn time
+  # (files/hub/neurodesk_integrations.py). XNAT itself must still be set up:
+  # JupyterHub plugin installed, hub URL and the `xnat` service token entered
+  # in XNAT (docs/xnat.md). This block does not configure XNAT.
+  jupyterhub:
+    enabled: false
+    url: ""                  # "" => http://<xnat.server.host>
+    # Secret holding the XNAT account the hub reads launch options with.
+    # "" => <release>-xnat-web-admin, the AIS xnat chart's admin Secret.
+    credentialsSecret: ""
+    usernameKey: username
+    passwordKey: password
+    # PVC with XNAT's archive and the XNAT path it is mounted at; launch mounts
+    # under that path become read-only subPaths of it. "" => <release>-xnat-web-archive.
+    archivePvc: ""
+    archiveMountPath: /data/xnat/archive
+    # XNAT writes its archive 0750/0640 as 65534:65534 (the AIS xnat chart's
+    # runAsUser/fsGroup). A pod given an archive mount gets this group as a
+    # supplemental group so the notebook user (1000) can read it.
+    archiveGid: 65534
+    uid: 1000                # NB_UID/NB_GID for non-Neurodesk XNAT images
+    gid: 100
+    requestTimeoutSeconds: 10
+    # XNAT unreachable or erroring: false = fail the spawn, true = spawn the
+    # chart defaults. A 404 (server not launched through XNAT, e.g. a direct
+    # hub login) always spawns the chart defaults.
+    failOpen: false
   uploadExtension:
     enabled: true
     # The init-container image that installs the extension's deps is chosen by
